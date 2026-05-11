@@ -1,0 +1,362 @@
+"""Rule-based risk scoring across the four categories."""
+from __future__ import annotations
+import re
+from typing import Any, Dict, List, Tuple
+from urllib.parse import urlparse
+
+from app.config import DEFAULT_PRICE_BASELINE
+
+
+# ---------- Helpers ----------
+
+def _parse_shop_age_days(shop_age: str | None) -> int | None:
+    """Approximate shop age in days from a free-form string.
+
+    Recognized units: years (~365d), months (~30d), weeks (7d), days.
+    Returns None when the string carries no recognizable duration.
+    """
+    if not shop_age:
+        return None
+    s = shop_age.lower().strip()
+    if "recently joined" in s or "new seller" in s:
+        return 0
+    days = 0
+    m_y = re.search(r"(\d+)\s*year", s)
+    m_mo = re.search(r"(\d+)\s*month", s)
+    m_w = re.search(r"(\d+)\s*week", s)
+    m_d = re.search(r"(\d+)\s*day", s)
+    if m_y:
+        days += int(m_y.group(1)) * 365
+    if m_mo:
+        days += int(m_mo.group(1)) * 30
+    if m_w:
+        days += int(m_w.group(1)) * 7
+    if m_d:
+        days += int(m_d.group(1))
+    if days == 0 and not (m_y or m_mo or m_w or m_d):
+        return None
+    return days
+
+
+def _parse_percent(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip().rstrip("%").strip()
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _parse_sold_count(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    s = str(value).strip().lower().replace("+", "").replace(",", "")
+    if not s:
+        return None
+    try:
+        if s.endswith("k"):
+            return int(float(s[:-1]) * 1000)
+        if s.endswith("m"):
+            return int(float(s[:-1]) * 1_000_000)
+        return int(float(s))
+    except ValueError:
+        return None
+
+
+# ---------- Category 1: Seller attributes ----------
+
+def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
+    score = 0
+    flags: List[str] = []
+    platform = listing.get("platform")
+
+    if not listing.get("seller_name"):
+        score += 15
+        flags.append("Seller name not available")
+
+    # Profile URL not separately captured — treat absent seller_name as proxy
+
+    days = _parse_shop_age_days(listing.get("shop_age"))
+    if days is not None:
+        if days == 0 and (listing.get("shop_age") or "").lower().find("recently") != -1:
+            score += 15
+            flags.append("Seller recently joined the platform")
+        elif days < 30:
+            score += 15
+            flags.append("Seller account under 30 days old")
+        elif days < 90:
+            score += 8
+            flags.append("Seller account under 90 days old")
+
+    if platform == "shopee":
+        rr = _parse_percent(listing.get("response_rate"))
+        if rr is not None:
+            if rr < 50:
+                score += 10
+                flags.append("Very low seller response rate")
+            elif rr < 80:
+                score += 5
+                flags.append("Below-average seller response rate")
+
+    if platform == "lazada":
+        sr = _parse_percent(listing.get("seller_rating"))
+        if sr is not None:
+            if sr < 70:
+                score += 15
+                flags.append("Very low seller rating")
+            elif sr < 85:
+                score += 8
+                flags.append("Below-average seller rating")
+
+    # Positive signals — reduce
+    if platform == "shopee" and listing.get("is_shopee_mall"):
+        score -= 10
+    if platform == "lazada" and listing.get("is_lazmall"):
+        score -= 10
+    badges = listing.get("seller_badges") or []
+    badge_set = {str(b).lower() for b in badges}
+    if any("lazmall" in b for b in badge_set):
+        score -= 10
+    if any("top seller" in b for b in badge_set):
+        score -= 5
+    if any("preferred" in b for b in badge_set):
+        score -= 5
+
+    score = max(0, min(score, 25))
+    return score, flags
+
+
+# ---------- Category 2: Listing metadata ----------
+
+def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
+    score = 0
+    flags: List[str] = []
+    platform = listing.get("platform")
+
+    image_count = listing.get("image_count") or 0
+    if image_count == 0:
+        score += 10
+        flags.append("No product images provided")
+    elif image_count < 3:
+        score += 5
+        flags.append("Very few product images")
+
+    price = listing.get("price")
+    if price == 0 or price == 0.0:
+        # Distinguish "free" — Shopee/Lazada normalize free to 0; FB has price=0 if free
+        desc = (listing.get("description") or "").lower()
+        if "free" not in desc:
+            score += 8
+            flags.append("Price reported as 0 without 'free' indication")
+
+    if isinstance(price, (int, float)) and price is not None and 0 < price < DEFAULT_PRICE_BASELINE:
+        score += 10
+        flags.append("Price unusually low compared to typical market")
+
+    if platform in ("shopee", "lazada"):
+        rating = listing.get("rating")
+        rating_count = listing.get("rating_count")
+        if rating == 5.0 and isinstance(rating_count, int) and rating_count < 10:
+            score += 15
+            flags.append("Perfect rating with very few reviews")
+        elif isinstance(rating, (int, float)):
+            if rating < 3.5:
+                score += 15
+                flags.append("Low average rating")
+            elif rating < 4.0:
+                score += 8
+                flags.append("Below-average rating")
+
+        sold = _parse_sold_count(listing.get("sold_count"))
+        if sold == 0:
+            score += 8
+            flags.append("Zero recorded sales")
+
+    if platform == "facebook":
+        if listing.get("price_is_variant"):
+            score += 5
+            flags.append("Price shown as a variant range")
+        if not listing.get("condition"):
+            score += 5
+            flags.append("Item condition not specified")
+        listing_date = (listing.get("listing_date") or "").lower()
+        if any(k in listing_date for k in ["minute", "hour", "just now"]) and "day" not in listing_date:
+            score += 8
+            flags.append("Listing posted very recently (under 24h)")
+        desc = listing.get("description") or ""
+        if desc and "details" in desc.lower() and len(desc.strip()) < 80:
+            score += 8
+            flags.append("Description appears auto-generated only")
+
+    score = max(0, min(score, 25))
+    return score, flags
+
+
+# ---------- Category 3: Textual NLP (rule layer) ----------
+
+URGENCY_PATTERNS = [
+    r"\blimited\s+stocks?\b", r"\btoday\s+only\b", r"\bbili\s+na\b", r"\bhuli na\b",
+    r"\blast\s+\d+\b", r"\brush\b", r"\bhurry\b", r"\bact\s+now\b",
+    # Additional Filipino scarcity / urgency phrases
+    r"\bkunin\s+na\b", r"\bpaubos\s+na\b", r"\blast\s+piece\b", r"\bfew\s+left\b",
+    r"\bsale\s+na\b", r"\bsale\s+ends?\b", r"\bflash\s+sale\b", r"\blimitado\b",
+    r"\bhuling\s+(?:piraso|stock)\b", r"\bsolid\s+na\b",
+]
+PROMISE_PATTERNS = [
+    r"\b100\s*%\s*legit\b", r"\bguaranteed\b", r"\bno\s+issues?\b",
+    r"\boriginal\s*na\s*original\b", r"\bauthentic\s*po\b",
+    # Additional over-promising phrases
+    r"\boriginal\s+talaga\b", r"\bcertified\s+original\b", r"\bseal[ed]*\b",
+    r"\bbrand\s+new\s+sealed\b", r"\b100%\s*original\b", r"\blegit\s+seller\b",
+    r"\btested\s+and\s+working\b", r"\bno\s+defect\b", r"\bperfect\s+condition\b",
+    r"\btotoo\s+na\b", r"\boriginal\s+brand\b",
+]
+PAYMENT_PATTERNS = [
+    r"\bcod\s+only\b", r"\bgcash\s+muna\b", r"\bno\s+returns?\b",
+    r"\bnon[-\s]?refundable\b", r"\bdownpayment\s+first\b", r"\bpaid\s+upfront\b",
+    # Additional off-platform / pressure payment phrases
+    r"\bfull\s+payment\s+(?:muna|first|required)\b", r"\bno\s+cod\b",
+    r"\bcash\s+basis\b", r"\bmeet\s*up\s+(?:only|muna|lang)\b",
+    r"\bgcash\s+only\b", r"\bpaymaya\s+only\b", r"\bbank\s+transfer\s+(?:only|muna)\b",
+    r"\bno\s+cancel\b", r"\bno\s+refund\b", r"\bbayad\s+muna\b",
+]
+VAGUE_PATTERNS = [
+    r"\bgeneric\b", r"\bbrand\s*[:\-]?\s*none\b", r"\bno\s+brand\b",
+    r"\bunbranded\b", r"\bgeneric\s+brand\b",
+    # Additional vague product identity phrases
+    r"\bwalang\s+brand\b", r"\bdi\s+ko\s+alam\s+brand\b",
+    r"\bchinese\s+brand\b", r"\blocal\s+brand\b", r"\bno\s+name\s+brand\b",
+]
+
+
+def _matches(text: str, patterns: List[str]) -> List[str]:
+    found = []
+    for p in patterns:
+        if re.search(p, text, flags=re.IGNORECASE):
+            found.append(p)
+    return found
+
+
+def score_text(listing: Dict[str, Any], nlp_hits: Dict[str, object] | None = None) -> Tuple[int, List[str], Dict[str, str]]:
+    """Returns (score, flags, triggered_by_map).
+
+    triggered_by_map: flag_string -> matched phrase (only for text-based flags).
+    """
+    score = 0
+    flags: List[str] = []
+    triggered_by: Dict[str, str] = {}
+    desc = listing.get("description") or ""
+    platform = listing.get("platform")
+
+    if not desc or len(desc.strip()) < 20:
+        score += 10
+        flags.append("Description missing or too short")
+    else:
+        text = desc
+        # Use spaCy hits if provided, else regex fallback
+        urgency = nlp_hits.get("urgency") if nlp_hits else bool(_matches(text, URGENCY_PATTERNS))
+        promise = nlp_hits.get("promise") if nlp_hits else bool(_matches(text, PROMISE_PATTERNS))
+        payment = nlp_hits.get("payment") if nlp_hits else bool(_matches(text, PAYMENT_PATTERNS))
+        vague = nlp_hits.get("vague") if nlp_hits else bool(_matches(text, VAGUE_PATTERNS))
+
+        if urgency:
+            score += 10
+            flags.append("Urgency or scarcity language detected")
+            m = (nlp_hits.get("urgency_match") if nlp_hits else None) or next(
+                (re.search(p, text, re.IGNORECASE) for p in URGENCY_PATTERNS if re.search(p, text, re.IGNORECASE)), None
+            )
+            if m:
+                triggered_by["Urgency or scarcity language detected"] = m if isinstance(m, str) else m.group(0)
+        if promise:
+            score += 10
+            flags.append("Over-promising language detected")
+            m = (nlp_hits.get("promise_match") if nlp_hits else None) or next(
+                (re.search(p, text, re.IGNORECASE) for p in PROMISE_PATTERNS if re.search(p, text, re.IGNORECASE)), None
+            )
+            if m:
+                triggered_by["Over-promising language detected"] = m if isinstance(m, str) else m.group(0)
+        if payment:
+            score += 10
+            flags.append("Pressure payment terms detected")
+            m = (nlp_hits.get("payment_match") if nlp_hits else None) or next(
+                (re.search(p, text, re.IGNORECASE) for p in PAYMENT_PATTERNS if re.search(p, text, re.IGNORECASE)), None
+            )
+            if m:
+                triggered_by["Pressure payment terms detected"] = m if isinstance(m, str) else m.group(0)
+        if vague:
+            score += 5
+            flags.append("Vague brand or publisher information")
+            m = (nlp_hits.get("vague_match") if nlp_hits else None) or next(
+                (re.search(p, text, re.IGNORECASE) for p in VAGUE_PATTERNS if re.search(p, text, re.IGNORECASE)), None
+            )
+            if m:
+                triggered_by["Vague brand or publisher information"] = m if isinstance(m, str) else m.group(0)
+
+    specs = listing.get("specifications")
+    if platform == "lazada":
+        if not specs:
+            score += 3
+            flags.append("Lazada specifications missing")
+    if platform == "shopee":
+        if specs is None:
+            score += 2
+            flags.append("Shopee specifications missing")
+
+    score = max(0, min(score, 35))
+    return score, flags, triggered_by
+
+
+# ---------- Category 4: URL & domain ----------
+
+LEGIT_DOMAINS = {
+    "shopee.ph", "shopee.com.ph", "lazada.com.ph", "facebook.com",
+    "m.facebook.com", "web.facebook.com",
+}
+TYPO_PATTERNS = [
+    r"shoope", r"shop+ee[a-z]", r"laz+ad+a[a-z]", r"f[a4]ceb[o0]ok",
+    r"shopeephil", r"lazada-ph\.", r"sh0pee", r"lazadaa",
+]
+
+
+def score_url(url: str) -> Tuple[int, List[str]]:
+    score = 0
+    flags: List[str] = []
+    if not url:
+        return 0, flags
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return 25, ["Malformed URL"]
+
+    host = (parsed.hostname or "").lower()
+    scheme = (parsed.scheme or "").lower()
+
+    # Typosquatting
+    is_legit = any(host == d or host.endswith("." + d) for d in LEGIT_DOMAINS)
+    if not is_legit:
+        for p in TYPO_PATTERNS:
+            if re.search(p, host):
+                score += 25
+                flags.append("Possible typosquatting domain")
+                break
+
+    if scheme and scheme != "https":
+        score += 10
+        flags.append("Connection is not HTTPS")
+
+    # Subdomain depth: count labels minus base (2 labels for typical TLDs, 3 for .com.ph)
+    labels = host.split(".") if host else []
+    base_len = 3 if host.endswith(".com.ph") else 2
+    sub_depth = max(0, len(labels) - base_len)
+    if sub_depth > 2:
+        score += 10
+        flags.append("Unusually deep subdomain")
+
+    score = max(0, min(score, 25))
+    return score, flags
