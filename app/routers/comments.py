@@ -7,6 +7,7 @@ from app.rate_limit import rate_limit_analyze
 from app.services.ml_classifier import bot_likelihood, fake_review_likelihood
 from app.services.insights import (
     enrich_flags, build_recommendations, comment_summary,
+    extract_comment_themes, comment_pattern_summary,
 )
 
 router = APIRouter(prefix="/analyze", tags=["analyze"])
@@ -171,10 +172,17 @@ def analyze_comments_payload(payload: CommentsPayload) -> dict:
         "flag_details": enrich_flags(flags, payload.platform),
         "summary": comment_summary(bot, fake, flags, n),
         "comment_summary": structured_summary,
+        "comment_pattern_summary": comment_pattern_summary(flags, n, bot, fake),
+        "small_sample_warning": (
+            f"Only {n} review{'s' if n != 1 else ''} analyzed. Switch between star rating tabs "
+            "and navigate through more comment pages to improve the reliability of this assessment."
+            if n < 10 else None
+        ),
         "recommendations": build_recommendations(flags),
         "review_diversity_score": diversity_score,
         "pages_coverage_note": pages_coverage_note,
         "dominant_sentiment": dominant_sentiment,
+        "review_themes": extract_comment_themes(raw),
     }
 
 

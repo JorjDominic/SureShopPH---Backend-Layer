@@ -161,7 +161,11 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
     if platform in ("shopee", "lazada"):
         rating = listing.get("rating")
         rating_count = listing.get("rating_count")
-        if rating == 5.0 and isinstance(rating_count, int) and rating_count < 10:
+        no_rating = (rating is None or rating == 0.0) and (rating_count is None or rating_count == 0)
+        if no_rating:
+            score += 14
+            flags.append("Product has no ratings yet")
+        elif rating == 5.0 and isinstance(rating_count, int) and rating_count < 10:
             score += 15
             flags.append("Perfect rating with very few reviews")
         elif isinstance(rating, (int, float)):
@@ -174,8 +178,11 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
 
         sold = _parse_sold_count(listing.get("sold_count"))
         if sold == 0:
-            score += 8
+            score += 10
             flags.append("Zero recorded sales")
+        elif sold is None:
+            score += 8
+            flags.append("No items sold on this listing")
 
     if platform == "facebook":
         if listing.get("price_is_variant"):
@@ -298,14 +305,8 @@ def score_text(listing: Dict[str, Any], nlp_hits: Dict[str, object] | None = Non
                 triggered_by["Vague brand or publisher information"] = m if isinstance(m, str) else m.group(0)
 
     specs = listing.get("specifications")
-    if platform == "lazada":
-        if not specs:
-            score += 3
-            flags.append("Lazada specifications missing")
-    if platform == "shopee":
-        if specs is None:
-            score += 2
-            flags.append("Shopee specifications missing")
+    # Specs absence is surfaced as a product notice (score_calculator.py),
+    # not as a scored flag — removes noise for listings that simply hide specs.
 
     score = max(0, min(score, 35))
     return score, flags, triggered_by

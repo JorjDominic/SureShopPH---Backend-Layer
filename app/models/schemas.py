@@ -181,6 +181,7 @@ class FlagDetail(BaseModel):
     severity: str
     label: str
     tip: str
+    explanation: str = ""
     triggered_by: Optional[str] = None
 
 
@@ -211,6 +212,19 @@ class CommentSummaryDetail(BaseModel):
     rating_diversity: bool = True
 
 
+class CommentThemeItem(BaseModel):
+    theme: str
+    label: str
+    mention_count: int
+    sentiment: Literal["positive", "negative", "mixed"]
+
+
+class ReviewThemes(BaseModel):
+    themes_detected: List[CommentThemeItem] = Field(default_factory=list)
+    summary_text: str = ""
+    disclaimer: str = ""
+
+
 class ScanCompleteness(BaseModel):
     level: str
     description: str
@@ -222,6 +236,7 @@ class ProductNotice(BaseModel):
     severity: Literal["info", "caution", "warning"] = "info"
     indicators: List[str] = Field(default_factory=list)
     recommended_action: str = ""
+    recommended_actions: List[str] = Field(default_factory=list)
     disclaimer: str
 
 
@@ -250,6 +265,7 @@ class ListingAnalysisResponse(BaseModel):
     platform_signals: PlatformSignals
     scan_completeness: Optional[ScanCompleteness] = None
     scan_mode_note: Optional[str] = None
+    closing_line: str = ""
     scan_timestamp: str
 
 
@@ -271,6 +287,9 @@ class CommentsAnalysisResponse(BaseModel):
     review_diversity_score: int = 100
     pages_coverage_note: Optional[str] = None
     dominant_sentiment: str = "positive"
+    comment_pattern_summary: str = ""
+    small_sample_warning: Optional[str] = None
+    review_themes: Optional[ReviewThemes] = None
 
 
 class DeepAnalysisResponse(BaseModel):

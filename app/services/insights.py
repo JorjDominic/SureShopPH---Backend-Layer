@@ -159,6 +159,17 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
             "recent reviews can help you understand the common concerns."
         ),
     },
+    "Product has no ratings yet": {
+        "code": "rating_none",
+        "category": "metadata",
+        "severity": "medium",
+        "tip": (
+            "This product has not received any buyer ratings. Without "
+            "review history it is harder to gauge product quality or "
+            "seller reliability — looking at the seller's other listings "
+            "for buyer feedback can help."
+        ),
+    },
     "Below-average rating": {
         "code": "rating_below_avg",
         "category": "metadata",
@@ -169,13 +180,24 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
         ),
     },
     "Zero recorded sales": {
-        "code": "no_sales",
+        "code": "sales_zero",
+        "category": "metadata",
+        "severity": "medium",
+        "tip": (
+            "No completed sales are shown for this listing. An untested "
+            "listing carries more uncertainty — checking the seller\'s "
+            "other listings for buyer feedback is a useful alternative."
+        ),
+    },
+    "No items sold on this listing": {
+        "code": "sales_unavailable",
         "category": "metadata",
         "severity": "low",
         "tip": (
-            "No completed sales are shown for this listing yet. New "
-            "listings often start this way; you may simply be among the "
-            "first buyers."
+            "The number of items sold was not visible on this page. "
+            "Without purchase history it is harder to gauge how well the "
+            "product performs — the seller\'s overall reviews can give "
+            "a better picture."
         ),
     },
     "Price shown as a variant range": {
@@ -271,26 +293,6 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
             "ordering."
         ),
     },
-    "Lazada specifications missing": {
-        "code": "specs_missing_lazada",
-        "category": "text",
-        "severity": "low",
-        "tip": (
-            "The specifications section is empty. The seller may still "
-            "provide details on request — a quick message can fill in "
-            "the gaps."
-        ),
-    },
-    "Shopee specifications missing": {
-        "code": "specs_missing_shopee",
-        "category": "text",
-        "severity": "low",
-        "tip": (
-            "The specifications section is empty. Ask the seller for the "
-            "details that matter most for your purchase."
-        ),
-    },
-
     # ---- URL / domain ----
     "Malformed URL": {
         "code": "url_malformed",
@@ -599,6 +601,134 @@ RECOMMENDATIONS_BY_CODE: Dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
+# Per-code explanation text: "why it matters and what to do" (second part of
+# the two-part flag format). Surfaced alongside the detection label in the
+# extension's flag_details output.
+# ---------------------------------------------------------------------------
+
+EXPLANATIONS_BY_CODE: Dict[str, str] = {
+    "seller_name_missing": "Without a visible seller name it is harder to look up their track record. Open the seller's profile directly to confirm their store details before purchasing.",
+    "seller_new": "A newly created account has no purchase history, making it harder to gauge reliability. Browse their other listings or send a message to gauge responsiveness before committing.",
+    "seller_under_30d": "Accounts active for less than a month have not had time to build buyer feedback. Send a brief message before ordering — response speed is a useful signal.",
+    "seller_under_90d": "A seller less than 90 days old is still building their track record. Glancing at their other listings gives a fuller picture of their activity.",
+    "seller_response_low": "A very low response rate can mean slower replies when you have questions or issues after purchase. Try messaging the seller first — a prompt reply is a positive sign.",
+    "seller_response_below_avg": "Slower-than-average response times may affect how quickly your questions get answered. A short pre-order message can confirm stock availability and shipping timelines.",
+    "seller_rating_low": "A low seller rating reflects feedback from past buyers. Reading the most recent reviews helps you understand what concerns buyers commonly mention.",
+    "seller_rating_below_avg": "A slightly below-average rating suggests some buyers had a less-than-ideal experience. Skimming the latest reviews for recurring themes is a quick way to check.",
+    "no_images": "Without photos it is impossible to visually verify the item's condition. Ask the seller for actual photos of the product — not stock images — before placing an order.",
+    "few_images": "Limited photos make it harder to assess the item's condition and what is included. Requesting additional angles or close-ups helps confirm what you will receive.",
+    "price_zero": "A zero price is sometimes a placeholder while the seller sets up variants. Confirm the actual price in writing with the seller before proceeding to checkout.",
+    "price_low": "A price significantly below similar listings could reflect a genuine sale, a used item, a budget edition, or a different variant. Verify the product condition, edition, and what is included with the seller before completing your purchase.",
+    "price_variant": "Variant pricing means the final cost depends on which option you select. Confirm which variant matches the price you expect before adding to cart.",
+    "rating_none": "Without any buyer ratings there is no purchase history to draw on. Looking at the seller's other listings for buyer feedback gives a better sense of their reliability.",
+    "perfect_rating_few_reviews": "A perfect score from a very small number of reviews can shift with just one negative experience. Look for similar listings with more reviews to compare buyer experiences.",
+    "rating_low": "A below-average product rating indicates that buyers have reported concerns. Reading recent reviews helps you understand the most common issues.",
+    "rating_below_avg": "A slightly below-average rating suggests mixed buyer experiences. A quick look at recent reviews can highlight what buyers most often mention.",
+    "sales_zero": "No recorded sales means there is no purchase history for this listing. Check the seller's other listings for buyer feedback as an alternative reference.",
+    "sales_unavailable": "Without a visible sales count it is harder to assess how well this product has performed. The seller's overall profile reviews can give a better picture.",
+    "condition_unspecified": "Not knowing whether an item is brand new, used, or refurbished makes it harder to judge value and what to expect on arrival. Ask the seller directly before placing your order.",
+    "listing_new": "A listing with no buyer interaction history provides no track record to assess. Taking a moment to review the seller's profile and other listings is a useful extra step.",
+    "description_autogen": "Auto-generated descriptions often lack specifics that genuine sellers would include. Ask for details — size, model, or contents — that matter for your purchase.",
+    "description_short": "Very little product information makes it harder to know exactly what you are buying. Message the seller for the details that are missing before ordering.",
+    "urgency_language": "Pressure wording is designed to speed up purchase decisions. Taking time to compare similar listings typically shows the item is not as scarce as the description suggests.",
+    "promise_language": "Assurance phrases are common in marketing but do not substitute for verification. Ask the seller to confirm specific claims such as warranty coverage or original packaging.",
+    "payment_pressure": "Upfront or off-platform payment terms reduce buyer protection significantly. Whenever possible, use the platform's official checkout — it offers recourse if the item does not arrive as described.",
+    "brand_vague": "Unspecified brand information makes it harder to verify the product's origin and authenticity. If the brand matters to you, ask the seller to confirm before ordering.",
+    "url_malformed": "A URL that cannot be parsed cleanly may indicate you arrived via an unusual link. Type the platform's official web address directly into your browser rather than following external links.",
+    "url_typo": "A web address that closely resembles but does not exactly match an official platform domain is a common technique used to misdirect buyers. Double-check the address bar before logging in or entering payment details.",
+    "url_no_https": "An unencrypted connection means your login and payment information is not protected. Do not enter any sensitive details on this page.",
+    "url_deep_subdomain": "An unusually complex URL is atypical for official platform listings. Verify that the domain in the address bar matches the platform's official web address.",
+    "comments_duplicate": "Reviews that share nearly identical text are less likely to reflect independent personal buyer experiences. Look for reviews that describe specific product details — delivery time, packaging, condition.",
+    "comments_time_cluster": "A concentration of reviews posted in a short window is unusual for organic buyer activity. Look for reviews spread across different dates for a more balanced view.",
+    "comments_review_burst": "The majority of reviews arriving within one week is unusual for organic buyer activity. Look for reviews spread across different months rather than relying on a single concentrated window.",
+    "comments_all_5star": "A completely uniform rating across all collected reviews is uncommon for most products. While it could reflect genuine satisfaction, reading the actual review text helps confirm whether the feedback reflects real experiences.",
+    "comments_no_specifics": "Reviews that do not mention specific details like delivery time, packaging quality, or product condition provide less useful information. Prioritize reviews that describe a real purchase experience.",
+    "comments_ml_signal": "The review-pattern model flagged this set of comments as showing patterns associated with review inflation. This is one signal among many — reading the reviews yourself provides the most reliable picture.",
+    "comments_rating_text_mismatch": "A mismatch between a high star rating and language suggesting disappointment is an unusual pattern. Read the full text of several high-rated reviews before relying on the star score.",
+    "comments_no_rating_diversity": "A complete absence of negative or mixed ratings is uncommon for most products. Comparing with reviews on similar product listings helps provide context for whether a perfect rating is typical.",
+    "comments_username_sequence": "Reviewer usernames that follow a sequential numbering pattern can indicate accounts created in bulk. Focus on the review content itself rather than the usernames.",
+    "comments_forced_product_mention": "The same unusual word appearing across most reviews can indicate template-based review writing. Look for reviews that describe a genuine personal experience with the product.",
+    "comments_identical_sentence_end": "Reviews that end with the same phrase are associated with copy-pasted review activity. Seek out reviews with unique, specific detail for more useful buyer information.",
+    "comments_generic": "Short generic phrases like 'legit' or 'sulit' without product specifics are common in both genuine and non-genuine reviews. Prioritize reviews that describe the actual item.",
+    "comments_short": "Very short reviews provide limited information regardless of their rating. Focus on longer reviews that mention delivery time, product condition, or specific details.",
+    "comments_date_cluster": "Most reviews concentrated on a single date is unusual for organic buyer activity. Look for reviews from a range of dates for a more reliable picture.",
+    "comments_bot_usernames": "Several reviewers use generic auto-generated username formats. Many real users keep default usernames, so focus on the review content itself.",
+    "comments_all_caps": "All-caps reviews are a minor stylistic signal. Judge reviews by their content rather than their formatting.",
+    "comments_single_word_5": "Single-word 5-star reviews provide almost no useful information about the product. Look for reviews that describe a real purchase experience.",
+    "comments_unverified": "Unverified reviews are not linked to a confirmed purchase of this specific item. Give more weight to verified-purchase reviews when they are available.",
+    "comments_photo_only": "Photo-only reviews without written feedback provide limited context. Combine photo evidence with written reviews that describe the actual purchase experience.",
+    "comments_excessive_emoji": "Reviews consisting mostly of emoji with little written text provide limited information. Prioritize written reviews that describe the product or delivery experience.",
+    "rating_none": "Without any buyer ratings there is no purchase history to draw on. Looking at the seller's other listings for buyer feedback gives a better sense of their reliability.",
+}
+
+# ---------------------------------------------------------------------------
+# Flag weights for dynamic risk message generation.
+# Higher weight = more prominently named in the summary message.
+# ---------------------------------------------------------------------------
+
+_SEVERITY_WEIGHT: Dict[str, int] = {"high": 3, "medium": 2, "low": 1}
+
+_CODE_WEIGHT_OVERRIDE: Dict[str, int] = {
+    "url_typo": 6, "url_no_https": 6, "url_malformed": 6,
+    "payment_pressure": 6,
+    "comments_rating_text_mismatch": 5,
+    "seller_under_30d": 4, "seller_new": 4,
+    "comments_review_burst": 4,
+    "urgency_language": 3, "price_low": 3, "rating_none": 3, "sales_zero": 3,
+    "perfect_rating_few_reviews": 3, "comments_ml_signal": 3,
+}
+
+# Plain-English description of each signal for use in the dynamic risk message.
+_FLAG_PLAIN_NAMES: Dict[str, str] = {
+    "url_typo": "a web address that does not match the official platform domain",
+    "url_no_https": "an insecure page connection",
+    "url_malformed": "a URL that could not be properly parsed",
+    "url_deep_subdomain": "an unusually deep subdomain structure",
+    "payment_pressure": "payment terms that require upfront or off-platform payment",
+    "seller_new": "a seller account with no established sales history",
+    "seller_under_30d": "a seller account created within the last 30 days",
+    "seller_under_90d": "a seller account less than 90 days old",
+    "seller_name_missing": "a seller whose display name was not visible",
+    "seller_response_low": "a seller with a very low response rate",
+    "seller_response_below_avg": "a seller with a below-average response rate",
+    "seller_rating_low": "a seller with a very low rating from buyers",
+    "seller_rating_below_avg": "a seller with a below-average buyer rating",
+    "no_images": "a listing with no product photos",
+    "few_images": "a listing with very few product photos",
+    "price_zero": "a price displayed as zero",
+    "price_low": "a listed price notably lower than similar items",
+    "price_variant": "a price shown as a range across variants",
+    "rating_none": "a product with no buyer ratings yet",
+    "perfect_rating_few_reviews": "a perfect 5-star rating based on very few reviews",
+    "rating_low": "a below-average product rating from buyers",
+    "rating_below_avg": "a product rating slightly below average",
+    "sales_zero": "zero recorded sales for this listing",
+    "sales_unavailable": "a listing where the sales count was not visible",
+    "condition_unspecified": "an item condition not specified by the seller",
+    "listing_new": "a listing posted within the last 24 hours",
+    "description_autogen": "a description that appears auto-generated",
+    "description_short": "a product description that is missing or very short",
+    "urgency_language": "time-pressure or scarcity wording in the listing description",
+    "promise_language": "strong assurance phrases in the listing description",
+    "brand_vague": "vague or unspecified brand and publisher information",
+    "comments_duplicate": "a high proportion of identical review texts",
+    "comments_time_cluster": "several reviews posted within a 60-minute window",
+    "comments_review_burst": "the majority of reviews posted within a single 7-day window",
+    "comments_all_5star": "all collected reviews showing a perfect 5-star rating",
+    "comments_no_specifics": "reviews that do not mention specific product or delivery details",
+    "comments_ml_signal": "review patterns that the classifier associates with elevated review inflation",
+    "comments_rating_text_mismatch": "high-rated reviews containing language that suggests disappointment",
+    "comments_no_rating_diversity": "no negative or mixed ratings among all collected reviews",
+    "comments_username_sequence": "reviewer usernames following sequential numbering patterns",
+    "comments_forced_product_mention": "an unusual word repeated across the majority of reviews",
+    "comments_identical_sentence_end": "many reviews ending with identical phrases",
+    "comments_generic": "reviews dominated by short generic phrases",
+    "comments_short": "reviews that are unusually short on average",
+    "comments_bot_usernames": "several usernames matching bot-style patterns",
+}
+
+
+# ---------------------------------------------------------------------------
 # Verification checklist items — short, neutral steps a buyer can run through
 # when the risk band is Medium or High. Keyed by code so we can build the
 # list from whatever flags actually fired.
@@ -780,6 +910,7 @@ def enrich_flags(
                 "severity": "low",
                 "label": label,
                 "tip": "This is an informational signal. Take it as one data point alongside your own judgment.",
+                "explanation": "Consider this observation as context when evaluating the listing.",
             }
         else:
             entry = {
@@ -788,6 +919,7 @@ def enrich_flags(
                 "severity": meta["severity"],
                 "label": label,
                 "tip": meta["tip"],
+                "explanation": EXPLANATIONS_BY_CODE.get(meta["code"], ""),
             }
         # Only include triggered_by for text-category flags where we have a match
         phrase = tb.get(f)
@@ -849,10 +981,79 @@ def build_verify_checklist(flags: List[str], level: str, limit: int = 5) -> List
     return items
 
 
-def contextual_risk_message(level: str, flags: List[str]) -> str:
-    """Produce a band-appropriate message that mentions the most relevant
-    finding when one exists. Wording stays observational, never accusatory.
+def dynamic_risk_message(flags: List[str], level: str) -> str:
+    """Build a specific, flag-driven risk message naming the top two signals.
+
+    Selects the two highest-weight flags, names them in plain language, and
+    adds one contextual action sentence. Never uses "scam", "fraud", or "fake".
     """
+    if not flags:
+        return {
+            "Very Low": (
+                "This listing does not show strong observable risk signals based on "
+                "the available information. Standard buying caution still applies as "
+                "the system can only assess publicly visible data."
+            ),
+            "Low": (
+                "A few minor signals were noted. Reviewing the listing details before "
+                "purchasing is generally enough."
+            ),
+            "Medium": (
+                "Several signals are worth a closer look before purchasing. "
+                "The flags below highlight what may be worth confirming."
+            ),
+            "High": (
+                "Multiple signals are present. The checklist below outlines simple "
+                "steps you can take before committing to a purchase."
+            ),
+        }.get(level, "")
+
+    # Score each flag by weight
+    weighted: List[tuple] = []
+    for f in flags:
+        meta = FLAG_INSIGHTS.get(f)
+        if meta:
+            code = meta["code"]
+            override = _CODE_WEIGHT_OVERRIDE.get(code)
+            weight = override if override is not None else _SEVERITY_WEIGHT.get(meta["severity"], 1)
+            weighted.append((weight, f, code))
+    weighted.sort(key=lambda x: -x[0])
+
+    top = weighted[:2]
+    if not top:
+        return contextual_risk_message(level, flags)
+
+    names = [_FLAG_PLAIN_NAMES.get(t[2], t[1].lower()) for t in top]
+    top_codes = {t[2] for t in top}
+
+    # Pick a contextual action sentence
+    if top_codes & {"url_typo", "url_no_https", "url_malformed"}:
+        action = "Verify that you are on the official platform domain before entering any login or payment details."
+    elif "payment_pressure" in top_codes:
+        action = "Use the platform's official checkout when possible — it provides buyer protection if anything goes wrong."
+    elif top_codes & {"seller_new", "seller_under_30d"}:
+        action = "A short message to the seller and a look at their other listings can give a fuller picture before deciding."
+    elif top_codes & {"comments_rating_text_mismatch", "comments_review_burst", "comments_ml_signal"}:
+        action = "Read the actual review text to form your own view before relying on the star rating alone."
+    elif "price_low" in top_codes:
+        action = "Compare with similar listings and ask the seller to confirm the product condition and what is included."
+    else:
+        action = "Review the signals listed below and consider verifying key details with the seller before purchasing."
+
+    if len(names) == 1:
+        signal_text = f"This listing shows {names[0]}."
+    else:
+        signal_text = f"This listing shows {names[0]} and {names[1]}."
+
+    return (
+        f"{signal_text} "
+        f"These are observable signals worth noting when evaluating this listing. "
+        f"{action}"
+    )
+
+
+def contextual_risk_message(level: str, flags: List[str]) -> str:
+    """Kept for backward compatibility. New code should use dynamic_risk_message."""
     codes = codes_from_flags(flags)
 
     # Highest-priority specific messages first.
@@ -945,6 +1146,323 @@ def comment_summary(
         "review text to form your own view; the flags below explain what "
         "stood out."
     )
+
+
+def comment_pattern_summary(
+    flags: List[str],
+    n: int,
+    bot: float,
+    fake: float,
+) -> str:
+    """Build a cohesive plain-language summary of what the combined comment
+    patterns mean together — not just a list of separate observations.
+    """
+    if n == 0:
+        return (
+            "No reviews were collected during this scan. Run a Comments Scan "
+            "or Deep Scan while on a listing with buyer reviews to enable "
+            "comment analysis."
+        )
+    if n < 5:
+        return (
+            f"Only {n} review{'s' if n != 1 else ''} {'were' if n != 1 else 'was'} collected "
+            "which is too few to identify reliable patterns. Navigate through more comment "
+            "pages or switch between rating tabs to collect a larger sample for a more "
+            "reliable assessment."
+        )
+
+    flag_set = set(flags)
+    has_5star = bool(flag_set & {
+        "All comments are 5-star",
+        "No negative or mixed ratings detected among all reviews",
+    })
+    has_dup = "High duplicate-text ratio across comments" in flag_set
+    has_no_specifics = "Comments lack shipping or product specifics" in flag_set
+    has_cluster = bool(flag_set & {
+        "Multiple comments posted within a 60-minute window",
+        "Most comments cluster on a single date",
+    })
+    has_burst = "Majority of reviews posted within a 7-day burst" in flag_set
+    has_ml = "Classifier indicates elevated fake-review probability" in flag_set
+    has_mismatch = "High-rated reviews contain negative language" in flag_set
+    has_generic = "Generic phrases dominate comments" in flag_set
+
+    if has_dup and (has_5star or has_generic):
+        return (
+            "Several collected reviews contain very similar or identical text, "
+            "and most are 5-star ratings with little product-specific detail. "
+            "This combination is associated with coordinated review activity. "
+            "The review scores may not fully reflect genuine buyer experiences — "
+            "look for reviews that describe the actual product or delivery."
+        )
+    if has_dup:
+        return (
+            "Several collected reviews contain very similar or identical text. "
+            "This pattern is associated with coordinated review posting. "
+            "The review scores may not fully reflect genuine buyer experiences."
+        )
+    if has_burst and has_5star:
+        return (
+            "The majority of reviews were posted within a single short window "
+            "and nearly all are 5-star ratings. Genuine buyer feedback typically "
+            "accumulates over time from different buyers. "
+            "Interpret the rating score with this context in mind."
+        )
+    if has_burst:
+        return (
+            "The majority of reviews were posted within a single 7-day window. "
+            "Genuine buyer activity typically accumulates over weeks and months. "
+            "Look for reviews spread across different time periods for a more balanced view."
+        )
+    if has_mismatch:
+        return (
+            "Some reviews are rated 5 stars but contain wording that suggests "
+            "the buyer experienced a problem with the product. This mismatch "
+            "is worth noting when relying on the star rating. "
+            "Read the full text of several reviews to form your own view."
+        )
+    if has_ml and (has_5star or has_no_specifics):
+        return (
+            "The review-pattern analysis flagged several signals associated with "
+            "inflated reviews — including rating uniformity and limited product-specific detail. "
+            "These are probabilistic signals, not confirmed findings. "
+            "Reading the actual review text yourself gives the most reliable picture."
+        )
+    if has_5star and has_no_specifics and n < 15:
+        return (
+            f"Only {n} reviews were collected, which is a small sample for this listing. "
+            "All collected reviews are 5-star and none mention specific details like "
+            "delivery experience or product condition. This combination is commonly "
+            "observed in listings with limited genuine buyer history. "
+            "The review scores should be interpreted with this context in mind."
+        )
+    if has_5star and has_no_specifics:
+        return (
+            "All collected reviews are 5-star and none describe specific product "
+            "or delivery details. While this could reflect genuine satisfaction, "
+            "reviews that only give a perfect rating without detail are harder to "
+            "assess independently. Reading several reviews carefully can help."
+        )
+    if has_cluster:
+        return (
+            "Several reviews were posted within a very short time window. "
+            "Organic buyer reviews typically accumulate gradually over time. "
+            "This clustering pattern is worth noting when evaluating the review history."
+        )
+    if not flags and bot < 0.2 and fake < 0.2:
+        return (
+            "The collected reviews include a variety of ratings and mention specific "
+            "details like delivery time and product condition. These characteristics "
+            "are commonly found in genuine buyer feedback."
+        )
+    return (
+        "A few patterns are worth noting in the collected reviews. "
+        "The flags below explain what stood out — reading the actual review "
+        "text alongside these signals gives the most reliable picture."
+    )
+# ---------------------------------------------------------------------------
+
+_THEMES: Dict[str, Dict] = {
+    "delivery_speed": {
+        "label": "Delivery Speed",
+        "keywords": [
+            "fast", "quick", "mabilis", "speedy", "agad", "maaga", "arrived", "on time",
+            "ontime", "delivered", "delivery", "shipping", "shipped", "slow", "late",
+            "delayed", "nalate", "matagal", "tagal", "hours", "days", "week",
+        ],
+        "negative_keywords": ["slow", "late", "delayed", "nalate", "matagal", "tagal"],
+    },
+    "product_quality": {
+        "label": "Product Quality",
+        "keywords": [
+            "quality", "kalidad", "maayos", "maganda", "ganda", "nice", "good",
+            "okay", "ok", "ok naman", "broken", "sira", "defective", "damaged",
+            "poor quality", "bad quality", "substandard", "hindi maganda",
+            "hindi maayos", "rough", "cheap", "flimsy", "durable", "sturdy",
+            "matibay", "tibay", "marupok",
+        ],
+        "negative_keywords": [
+            "broken", "sira", "defective", "damaged", "poor quality", "bad quality",
+            "substandard", "hindi maganda", "hindi maayos", "rough", "flimsy",
+            "cheap", "marupok",
+        ],
+    },
+    "authenticity": {
+        "label": "Authenticity",
+        "keywords": [
+            "original", "authentic", "legit", "genuine", "tunay", "totoo", "real",
+            "fake", "peke", "replika", "replica", "imitation", "counterfeit",
+            "not original", "hindi original", "mukhang fake",
+        ],
+        "negative_keywords": [
+            "fake", "peke", "replika", "replica", "imitation", "counterfeit",
+            "not original", "hindi original", "mukhang fake",
+        ],
+    },
+    "packaging": {
+        "label": "Packaging",
+        "keywords": [
+            "packaging", "pakete", "box", "kahon", "bubble wrap", "wrapped",
+            "well packed", "packed", "sealed", "intact", "secure",
+            "crushed", "open", "damaged box", "torn", "bukas", "basag",
+        ],
+        "negative_keywords": [
+            "crushed", "damaged box", "torn", "bukas", "basag", "open",
+        ],
+    },
+    "seller_communication": {
+        "label": "Seller Communication",
+        "keywords": [
+            "seller", "tindera", "vendor", "responsive", "nagreply", "nag-reply",
+            "replied", "reply", "communication", "helpful", "accommodating",
+            "kind", "mabait", "maayos", "ignored", "no reply", "walang sagot",
+            "hindi nagreply", "scammer", "hindi tumugon",
+        ],
+        "negative_keywords": [
+            "ignored", "no reply", "walang sagot", "hindi nagreply", "scammer",
+            "hindi tumugon",
+        ],
+    },
+    "listing_accuracy": {
+        "label": "Listing Accuracy",
+        "keywords": [
+            "as described", "as pictured", "same as picture", "kapareho",
+            "exactly", "accurate", "tama", "hindi kapareho", "different",
+            "not as described", "not as pictured", "misleading", "mali",
+            "wrong item", "maling item", "ibang item",
+        ],
+        "negative_keywords": [
+            "hindi kapareho", "different", "not as described", "not as pictured",
+            "misleading", "mali", "wrong item", "maling item", "ibang item",
+        ],
+    },
+    "overall_satisfaction": {
+        "label": "Overall Satisfaction",
+        "keywords": [
+            "satisfied", "happy", "masaya", "worth it", "sulit", "recommend",
+            "irerecommend", "i-recommend", "will buy again", "bibili ulit",
+            "disappointed", "hindi sulit", "not worth", "sayang", "regret",
+            "hindi na bibili", "hindi nagustuhan", "maganda", "ayos",
+        ],
+        "negative_keywords": [
+            "disappointed", "hindi sulit", "not worth", "sayang", "regret",
+            "hindi na bibili", "hindi nagustuhan",
+        ],
+    },
+}
+
+_NEGATIVE_QUALIFIERS = {
+    "hindi", "not", "never", "broken", "fake", "sira", "mali", "wrong",
+    "late", "delay", "delayed", "bad", "poor", "disappointed",
+}
+
+_DISCLAIMER = (
+    "This summary reflects patterns observed in publicly visible buyer comments "
+    "and should be used as a general guide only."
+)
+
+
+def extract_comment_themes(comments: List[Dict]) -> Dict:
+    """Analyse comment texts for recurring themes using keyword matching.
+
+    Returns a dict with:
+      - themes_detected: list of theme dicts (only themes seen in ≥2 comments)
+      - summary_text: 1-2 plain sentences covering the top themes
+      - disclaimer: fixed advisory string
+    """
+    texts = [
+        (c.get("text") or "").strip().lower()
+        for c in comments
+        if (c.get("text") or "").strip()
+    ]
+
+    if len(texts) < 5:
+        return {
+            "themes_detected": [],
+            "summary_text": (
+                "Not enough reviews were collected to identify meaningful patterns."
+            ),
+            "disclaimer": _DISCLAIMER,
+        }
+
+    # Count per-theme hits and detect sentiment
+    theme_counts: Dict[str, int] = {}
+    theme_negative: Dict[str, int] = {}
+
+    for theme_key, theme_meta in _THEMES.items():
+        pos_kws = theme_meta["keywords"]
+        neg_kws = set(theme_meta["negative_keywords"])
+        hit_count = 0
+        neg_count = 0
+        for text in texts:
+            hit = any(kw in text for kw in pos_kws)
+            if not hit:
+                continue
+            hit_count += 1
+            # Negative qualifier near a negative keyword
+            has_neg = any(q in text for q in _NEGATIVE_QUALIFIERS) and any(
+                nk in text for nk in neg_kws
+            )
+            if has_neg:
+                neg_count += 1
+        theme_counts[theme_key] = hit_count
+        theme_negative[theme_key] = neg_count
+
+    # Build output — only themes with ≥2 mentions
+    detected = []
+    for theme_key, count in sorted(theme_counts.items(), key=lambda x: -x[1]):
+        if count < 2:
+            continue
+        neg = theme_negative[theme_key]
+        if neg == 0:
+            sentiment = "positive"
+        elif neg >= count * 0.5:
+            sentiment = "negative"
+        else:
+            sentiment = "mixed"
+        detected.append({
+            "theme": theme_key,
+            "label": _THEMES[theme_key]["label"],
+            "mention_count": count,
+            "sentiment": sentiment,
+        })
+
+    # Build summary_text from top 2-3 themes
+    summary_text = _build_theme_summary(detected, len(texts))
+
+    return {
+        "themes_detected": detected,
+        "summary_text": summary_text,
+        "disclaimer": _DISCLAIMER,
+    }
+
+
+def _build_theme_summary(detected: List[Dict], total: int) -> str:
+    if not detected:
+        return (
+            "No recurring themes were identified in the available reviews."
+        )
+
+    top = detected[:3]
+    parts = []
+    for t in top:
+        label = t["label"].lower()
+        count = t["mention_count"]
+        sentiment = t["sentiment"]
+        share = int(round(count / total * 100)) if total else 0
+
+        if sentiment == "positive":
+            parts.append(f"{count} review{'s' if count != 1 else ''} mention {label} positively ({share}%)")
+        elif sentiment == "negative":
+            parts.append(f"{count} review{'s' if count != 1 else ''} raise concerns about {label} ({share}%)")
+        else:
+            parts.append(f"{count} review{'s' if count != 1 else ''} mention {label} with mixed feedback ({share}%)")
+
+    if len(parts) == 1:
+        return parts[0].capitalize() + "."
+    sentence1 = parts[0].capitalize() + "."
+    sentence2 = " ".join(p.capitalize() for p in parts[1:]) + "."
+    return f"{sentence1} {sentence2}"
 
 
 def enriched_breakdown(breakdown: Dict[str, int]) -> Dict[str, Dict]:

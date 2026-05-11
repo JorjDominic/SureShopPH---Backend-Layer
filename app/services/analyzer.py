@@ -12,8 +12,9 @@ from app.services.score_calculator import (
 from app.services.nlp_engine import detect_patterns
 from app.services.insights import (
     enrich_flags, build_recommendations, build_verify_checklist,
-    contextual_risk_message, enriched_breakdown,
+    contextual_risk_message, dynamic_risk_message, enriched_breakdown,
 )
+from app.services.score_calculator import closing_line as _closing_line
 from app.config import CONFIDENCE_TRUST
 
 
@@ -107,7 +108,8 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
         "risk_score": total,
         "risk_level": level,
         "risk_color": color,
-        "risk_message": contextual_risk_message(level, flags),
+        "risk_message": dynamic_risk_message(flags, level),
+        "closing_line": _closing_line(level),
         "flags": flags,
         "flag_details": enrich_flags(flags, plat, triggered_by=triggered_by),
         "positive_signals": positive,

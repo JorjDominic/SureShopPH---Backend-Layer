@@ -33,6 +33,28 @@ def risk_message(level: str) -> str:
     }.get(level, "")
 
 
+def closing_line(level: str) -> str:
+    """Single takeaway action line shown at the bottom of the result card."""
+    return {
+        "Very Low": (
+            "No strong signals detected. You can proceed with standard buying caution."
+        ),
+        "Low": (
+            "Some minor signals were detected. Review the indicators above and verify "
+            "key details with the seller before buying."
+        ),
+        "Medium": (
+            "Some signals were detected. Review the indicators above and verify key "
+            "details with the seller before buying."
+        ),
+        "High": (
+            "Multiple signals were detected. Take time to carefully review all "
+            "indicators above and verify product and seller details before "
+            "completing any payment."
+        ),
+    }.get(level, "")
+
+
 PRODUCT_KEYWORDS = [
     "brand", "publisher", "edition", "model", "isbn", "manufacturer",
     "author", "version",
@@ -53,6 +75,60 @@ _NOTICE_ACTIONS: Dict[str, str] = {
         "for electronics, appliances, or branded goods."
     ),
 }
+
+# Category-specific recommended actions for low price alerts
+_CATEGORY_ACTIONS: Dict[str, List[str]] = {
+    "electronics": [
+        "Ask the seller whether the item comes with a warranty and what it covers.",
+        "Confirm whether the original box, accessories, and documentation are included.",
+        "Request additional photos showing the actual unit, especially ports and labels.",
+        "Ask whether the item is brand new, refurbished, or open-box.",
+    ],
+    "books": [
+        "Ask the seller about the edition and publisher, and whether it is an original print or reprint.",
+        "Confirm whether the item is new or used and whether all pages are intact.",
+        "Request a photo of the title page and copyright information to verify the edition.",
+    ],
+    "clothing": [
+        "Ask the seller to confirm the brand authenticity and whether original tags and packaging are included.",
+        "Request measurements or a size chart to confirm the item will fit correctly.",
+        "Ask for photos of the actual item showing brand labels and stitching detail.",
+    ],
+    "general": [
+        "Ask the seller about the item's condition — whether it is brand new, used, or refurbished.",
+        "Request photos of the actual item rather than stock images.",
+        "Confirm exactly what is included in the listing before completing your purchase.",
+    ],
+}
+
+_ELECTRONICS_KW = {
+    "phone", "laptop", "tablet", "headphone", "earphone", "charger", "cable",
+    "keyboard", "mouse", "monitor", "speaker", "camera", "smartwatch", "router",
+    "powerbank", "power bank", "gadget", "electronic", "appliance", "aircon",
+    "refrigerator", "television", " tv", "tv ", "printer", "projector",
+}
+_BOOKS_KW = {
+    "book", "novel", "textbook", "isbn", "author", "publisher", "edition",
+    "paperback", "hardcover", "manga", "komik", "journal", "workbook",
+}
+_CLOTHING_KW = {
+    "shirt", "dress", "pants", "jeans", "jacket", "shoes", "sneakers", "sandals",
+    "bag", "tote", "backpack", "wallet", "blouse", "skirt", "polo", "shorts",
+    "hoodie", "sweatshirt", "cap", "hat", "watch", "jewelry", "bracelet",
+    "necklace", "ring",
+}
+
+
+def _detect_product_category(product_name: str, description: str) -> str:
+    """Roughly classify the product for context-aware recommended actions."""
+    combined = (product_name + " " + description).lower()
+    if any(kw in combined for kw in _ELECTRONICS_KW):
+        return "electronics"
+    if any(kw in combined for kw in _BOOKS_KW):
+        return "books"
+    if any(kw in combined for kw in _CLOTHING_KW):
+        return "clothing"
+    return "general"
 
 
 def build_product_notice(listing: Dict, breakdown: Dict[str, int]) -> Dict | None:
@@ -144,6 +220,12 @@ def build_product_notice(listing: Dict, breakdown: Dict[str, int]) -> Dict | Non
         "Verify product details with the seller before completing your purchase.",
     )
 
+    # Category-aware recommended_actions list for low-price listings
+    category = _detect_product_category(product_name, desc)
+    has_low_price = any("price" in i.lower() for i in indicators)
+    recommended_actions = list(_CATEGORY_ACTIONS.get(category, _CATEGORY_ACTIONS["general"])) \
+        if has_low_price else [recommended_action]
+
     return {
         "title": title,
         "message": (
@@ -153,6 +235,7 @@ def build_product_notice(listing: Dict, breakdown: Dict[str, int]) -> Dict | Non
         "severity": severity,
         "indicators": indicators,
         "recommended_action": recommended_action,
+        "recommended_actions": recommended_actions,
         "disclaimer": (
             "All outputs are probabilistic estimates based on observable "
             "signals. Verify directly with the seller before purchasing."
