@@ -1,5 +1,5 @@
 """Tests for the centralized risk-band thresholds."""
-from app.services.score_calculator import band, risk_message
+from app.services.score_calculator import band, risk_message, build_product_notice
 
 
 def test_band_high_range():
@@ -35,3 +35,50 @@ def test_risk_message_all_levels_non_empty():
     for level in ("Very Low", "Low", "Medium", "High"):
         msg = risk_message(level)
         assert isinstance(msg, str) and len(msg) > 10
+
+
+def test_risk_message_probabilistic_framing():
+    very_low = risk_message("Very Low").lower()
+    high = risk_message("High").lower()
+    assert "no strong risk signals" in very_low
+    assert "legitimate seller" not in very_low
+    assert "several high-weight signals" in high
+
+
+def test_product_notice_not_triggered_for_generic_item_without_brand():
+    notice = build_product_notice(
+        {
+            "platform": "shopee",
+            "product_name": "Phone Charger",
+            "description": "Fast delivery and good quality charger for daily use",
+            "price": 150,
+            "image_count": 2,
+        },
+        {
+            "seller_attributes": 0,
+            "listing_metadata": 0,
+            "textual_nlp": 0,
+            "url_domain": 0,
+        },
+    )
+    assert notice is None
+
+
+def test_product_notice_triggered_for_low_price_electronics_without_brand():
+    notice = build_product_notice(
+        {
+            "platform": "shopee",
+            "product_name": "Wireless Earbuds",
+            "description": "Compact earbuds with charging case included",
+            "price": 150,
+            "image_count": 2,
+        },
+        {
+            "seller_attributes": 0,
+            "listing_metadata": 0,
+            "textual_nlp": 0,
+            "url_domain": 0,
+        },
+    )
+    assert notice is not None
+    assert "Price is below typical category baseline" in notice["indicators"]

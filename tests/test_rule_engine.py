@@ -164,3 +164,25 @@ def test_score_text_clean_description():
     })
     # Clean copy should score very low compared to scam-y descriptions
     assert score < 10
+
+
+def test_score_text_taglish_urgency_and_promise():
+    score, flags, _tb = score_text({
+        "platform": "shopee",
+        "description": "Legit po ito! Bili na bago maubusan!",
+    })
+    assert score >= 20
+    assert any("urgency" in f.lower() for f in flags)
+    assert any("over-promising" in f.lower() for f in flags)
+
+
+def test_score_metadata_facebook_auto_generated_pattern():
+    score, flags = score_metadata({
+        "platform": "facebook",
+        "description": "Condition: New",
+        "listing_date": "2 hours ago",
+        "condition": None,
+        "image_count": 0,
+    })
+    assert score > 0
+    assert any("auto-generated" in f.lower() for f in flags)

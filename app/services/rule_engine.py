@@ -68,6 +68,20 @@ def _parse_sold_count(value: Any) -> int | None:
         return None
 
 
+def _looks_auto_generated_facebook_description(description: str) -> bool:
+    if not description:
+        return False
+    text = description.strip().lower()
+    patterns = [
+        r"^listed\s+\d+",
+        r"^condition\s*:\s*\w+[\w\s-]*$",
+        r"^location\s*:\s*.+$",
+        r"^\[details\]$",
+        r"^condition\s*:\s*\w+[\w\s-]*\s*[|,-]\s*location\s*:",
+    ]
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
 # ---------- Category 1: Seller attributes ----------
 
 def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
@@ -196,7 +210,7 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             score += 8
             flags.append("Listing posted very recently (under 24h)")
         desc = listing.get("description") or ""
-        if desc and "details" in desc.lower() and len(desc.strip()) < 80:
+        if _looks_auto_generated_facebook_description(desc):
             score += 8
             flags.append("Description appears auto-generated only")
 
@@ -212,7 +226,8 @@ URGENCY_PATTERNS = [
     # Additional Filipino scarcity / urgency phrases
     r"\bkunin\s+na\b", r"\bpaubos\s+na\b", r"\blast\s+piece\b", r"\bfew\s+left\b",
     r"\bsale\s+na\b", r"\bsale\s+ends?\b", r"\bflash\s+sale\b", r"\blimitado\b",
-    r"\bhuling\s+(?:piraso|stock)\b", r"\bsolid\s+na\b",
+    r"\bhuling\s+(?:piraso|stock)\b", r"\bsolid\s+na\b", r"\blimited\s+na\b",
+    r"\bkonti\s+na\s+lang\b", r"\bmaubusan\b", r"\bmabilis\s+maubos\b",
 ]
 PROMISE_PATTERNS = [
     r"\b100\s*%\s*legit\b", r"\bguaranteed\b", r"\bno\s+issues?\b",
@@ -221,7 +236,8 @@ PROMISE_PATTERNS = [
     r"\boriginal\s+talaga\b", r"\bcertified\s+original\b", r"\bseal[ed]*\b",
     r"\bbrand\s+new\s+sealed\b", r"\b100%\s*original\b", r"\blegit\s+seller\b",
     r"\btested\s+and\s+working\b", r"\bno\s+defect\b", r"\bperfect\s+condition\b",
-    r"\btotoo\s+na\b", r"\boriginal\s+brand\b",
+    r"\btotoo\s+na\b", r"\boriginal\s+brand\b", r"\blegit\s+po\b",
+    r"\blegit\s+talaga\b", r"\b200%\s*legit\b", r"\bproven\s+quality\b",
 ]
 PAYMENT_PATTERNS = [
     r"\bcod\s+only\b", r"\bgcash\s+muna\b", r"\bno\s+returns?\b",
@@ -231,6 +247,8 @@ PAYMENT_PATTERNS = [
     r"\bcash\s+basis\b", r"\bmeet\s*up\s+(?:only|muna|lang)\b",
     r"\bgcash\s+only\b", r"\bpaymaya\s+only\b", r"\bbank\s+transfer\s+(?:only|muna)\b",
     r"\bno\s+cancel\b", r"\bno\s+refund\b", r"\bbayad\s+muna\b",
+    r"\bwalang\s+cancel\b", r"\bwalang\s+returns?\b", r"\bbayad\s+agad\b",
+    r"\bgcash\s+lang\b", r"\bpaymaya\s+lang\b",
 ]
 VAGUE_PATTERNS = [
     r"\bgeneric\b", r"\bbrand\s*[:\-]?\s*none\b", r"\bno\s+brand\b",
@@ -238,6 +256,7 @@ VAGUE_PATTERNS = [
     # Additional vague product identity phrases
     r"\bwalang\s+brand\b", r"\bdi\s+ko\s+alam\s+brand\b",
     r"\bchinese\s+brand\b", r"\blocal\s+brand\b", r"\bno\s+name\s+brand\b",
+    r"\bmurang[\s-]mura\b", r"\bbrand\?\s*hindi\s+importante\b",
 ]
 
 

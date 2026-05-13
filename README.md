@@ -22,6 +22,10 @@ Copy `.env.example` to `.env` and fill in:
 SUPABASE_URL=...
 SUPABASE_KEY=...      # service role key
 JWT_SECRET=...        # Supabase project's JWT secret
+ENABLE_GROQ_COMMENT_SUMMARY=false
+GROQ_API_KEY=...
+GROQ_MODEL=llama-3.1-8b-instant
+GROQ_TIMEOUT_SECONDS=8
 ```
 
 Run the SQL in `supabase_schema.sql` against your Supabase project to

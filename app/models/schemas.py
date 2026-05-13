@@ -267,6 +267,7 @@ class ListingAnalysisResponse(BaseModel):
     scan_mode_note: Optional[str] = None
     closing_line: str = ""
     scan_timestamp: str
+    scanned_at_iso: Optional[str] = None
 
 
 class CommentsAnalysisResponse(BaseModel):
@@ -282,14 +283,20 @@ class CommentsAnalysisResponse(BaseModel):
     flags: List[str]
     flag_details: List[FlagDetail] = Field(default_factory=list)
     summary: str = ""
+    summary_source: Literal["groq", "fallback_unavailable"] = "fallback_unavailable"
     comment_summary: Optional[CommentSummaryDetail] = None
     recommendations: List[str] = Field(default_factory=list)
     review_diversity_score: int = 100
+    review_diversity_explanation: str = "Measures variety in review content and rating distribution. Lower scores may indicate repetitive or uniform reviews."
     pages_coverage_note: Optional[str] = None
     dominant_sentiment: str = "positive"
     comment_pattern_summary: str = ""
     small_sample_warning: Optional[str] = None
+    small_sample_flag: bool = False
+    sample_size_explanation: Optional[str] = None
+    comment_weight_note: Optional[str] = None
     review_themes: Optional[ReviewThemes] = None
+    scanned_at_iso: Optional[str] = None
 
 
 class DeepAnalysisResponse(BaseModel):

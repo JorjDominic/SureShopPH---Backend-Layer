@@ -1,8 +1,11 @@
 """Application configuration loaded from .env."""
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from the backend root regardless of current working directory.
+_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(dotenv_path=_ENV_PATH)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
@@ -10,6 +13,14 @@ JWT_SECRET = os.getenv("JWT_SECRET", "")
 
 APP_NAME = "SureShopPH Backend"
 APP_VERSION = "1.1.0"
+
+# ---------- Groq summary generation ----------
+ENABLE_GROQ_COMMENT_SUMMARY = os.getenv("ENABLE_GROQ_COMMENT_SUMMARY", "false").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_TIMEOUT_SECONDS = float(os.getenv("GROQ_TIMEOUT_SECONDS", "8"))
 
 # ---------- CORS ----------
 # Comma-separated list of allowed origins. Use "*" only for local dev.
@@ -90,4 +101,14 @@ def validate_env() -> None:
         raise EnvironmentError(
             f"Missing required environment variables: {', '.join(missing)}. "
             "Set them in your .env file before starting the server."
+        )
+
+    # Guardrail: keep deep-scan blending deterministic and bounded.
+    if not (0.0 <= DEEP_LISTING_WEIGHT <= 1.0 and 0.0 <= DEEP_COMMENTS_WEIGHT <= 1.0):
+        raise EnvironmentError(
+            "DEEP_LISTING_WEIGHT and DEEP_COMMENTS_WEIGHT must both be between 0 and 1."
+        )
+    if abs((DEEP_LISTING_WEIGHT + DEEP_COMMENTS_WEIGHT) - 1.0) > 1e-6:
+        raise EnvironmentError(
+            "DEEP_LISTING_WEIGHT and DEEP_COMMENTS_WEIGHT must sum to 1.0."
         )

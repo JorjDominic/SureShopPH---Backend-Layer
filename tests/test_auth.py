@@ -24,7 +24,7 @@ def test_expired_token_returns_none():
 def test_wrong_secret_returns_none():
     token = _token(
         {"sub": "user-abc", "exp": int(time.time()) + 3600},
-        secret="wrong-secret",
+        secret="wrong-secret-value-with-at-least-32-bytes",
     )
     assert verify_token(token) is None
 

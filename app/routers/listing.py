@@ -1,5 +1,6 @@
 """POST /analyze/listing — Normal Scan."""
 from fastapi import APIRouter, BackgroundTasks, Depends, Body, Header
+from datetime import datetime, timezone
 
 from app.auth import require_user
 from app.cache import hash_payload, get_scan, set_scan, get_idempotent, set_idempotent
@@ -33,6 +34,9 @@ async def analyze_listing(
         return cached
 
     result = analyze_listing_payload(payload)
+    
+    # Add ISO timestamp for client-side relative time calculations (Issue 10)
+    result["scanned_at_iso"] = datetime.now(timezone.utc).isoformat()
 
     background.add_task(save_scan, user["id"], {
         "platform": payload.get("platform"),

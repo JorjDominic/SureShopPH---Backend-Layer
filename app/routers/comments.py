@@ -1,9 +1,11 @@
 """POST /analyze/comments — Comments Only Scan."""
 from fastapi import APIRouter, Depends
+from datetime import datetime, timezone
 
 from app.auth import require_user
 from app.models.schemas import CommentsPayload, CommentsAnalysisResponse
 from app.rate_limit import rate_limit_analyze
+from app.services.groq_summarizer import generate_comment_summary
 from app.services.ml_classifier import bot_likelihood, fake_review_likelihood
 from app.services.insights import (
     enrich_flags, build_recommendations, comment_summary,
@@ -11,6 +13,8 @@ from app.services.insights import (
 )
 
 router = APIRouter(prefix="/analyze", tags=["analyze"])
+
+GROQ_SUMMARY_UNAVAILABLE = "Groq summary unavailable for this scan."
 
 
 def analyze_comments_payload(payload: CommentsPayload) -> dict:
@@ -158,6 +162,35 @@ def analyze_comments_payload(payload: CommentsPayload) -> dict:
         "rating_diversity": rating_diversity,
     }
 
+    local_summary = comment_summary(bot, fake, flags, n)
+    generated_summary = generate_comment_summary({
+        "comments_analyzed": n,
+        "bot_likelihood": round(bot, 3),
+        "fake_review_likelihood": round(fake, 3),
+        "bot_likelihood_pct": int(round(bot * 100)),
+        "fake_review_pct": int(round(fake * 100)),
+        "flags": flags,
+        "flag_details": enrich_flags(flags, payload.platform),
+        "summary": local_summary,
+        "comment_summary": structured_summary,
+        "comment_pattern_summary": comment_pattern_summary(flags, n, bot, fake),
+        "review_diversity_score": diversity_score,
+        "dominant_sentiment": dominant_sentiment,
+        "review_themes": extract_comment_themes(raw),
+        "small_sample_warning": (
+            f"Only {n} review{'s' if n != 1 else ''} analyzed. Switch between star rating tabs "
+            "and navigate through more comment pages to improve the reliability of this assessment."
+            if n < 10 else None
+        ),
+    })
+
+    if generated_summary:
+        summary_text = generated_summary
+        summary_source = "groq"
+    else:
+        summary_text = GROQ_SUMMARY_UNAVAILABLE
+        summary_source = "fallback_unavailable"
+
     return {
         "bot_likelihood": round(bot, 3),
         "fake_review_likelihood": round(fake, 3),
@@ -170,7 +203,8 @@ def analyze_comments_payload(payload: CommentsPayload) -> dict:
         "coverage_pct": min(100, max(0, coverage_pct)),
         "flags": flags,
         "flag_details": enrich_flags(flags, payload.platform),
-        "summary": comment_summary(bot, fake, flags, n),
+        "summary": summary_text,
+        "summary_source": summary_source,
         "comment_summary": structured_summary,
         "comment_pattern_summary": comment_pattern_summary(flags, n, bot, fake),
         "small_sample_warning": (
@@ -178,11 +212,20 @@ def analyze_comments_payload(payload: CommentsPayload) -> dict:
             "and navigate through more comment pages to improve the reliability of this assessment."
             if n < 10 else None
         ),
+        "small_sample_flag": n < 10,
+        "sample_size_explanation": (
+            f"⚠️ Small Sample — Only {n} reviews analyzed. Results are based on limited data. "
+            "Navigate through more comment pages for a more reliable assessment."
+            if n < 10 else None
+        ),
+        "review_diversity_explanation": "Measures variety in review content and rating distribution. Lower scores may indicate repetitive or uniform reviews.",
+        "comment_weight_note": "Comment signals contribute 30% of the Deep Scan score. The overall result reflects that listing metadata and seller attributes also influence the final assessment.",
         "recommendations": build_recommendations(flags),
         "review_diversity_score": diversity_score,
         "pages_coverage_note": pages_coverage_note,
         "dominant_sentiment": dominant_sentiment,
         "review_themes": extract_comment_themes(raw),
+        "scanned_at_iso": datetime.now(timezone.utc).isoformat(),
     }
 
 

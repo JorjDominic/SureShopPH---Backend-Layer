@@ -15,20 +15,19 @@ def band(score: int) -> Tuple[str, str]:
 def risk_message(level: str) -> str:
     return {
         "Very Low": (
-            "Few risk signals observed. Continue with normal caution when "
-            "buying online."
+            "No strong risk signals detected. Standard buying caution applies."
         ),
         "Low": (
-            "Some minor signals observed. Review the listing details before "
-            "purchasing."
+            "Minor observable signals detected. Review the indicators and "
+            "proceed with your own judgment."
         ),
         "Medium": (
-            "Multiple characteristics associated with elevated risk. "
-            "Verify seller reputation and product details before buying."
+            "Multiple observable signals detected. Consider verifying key "
+            "details with the seller before purchasing."
         ),
         "High": (
-            "Several observable risk signals present. Strongly consider "
-            "alternative listings or verified sellers."
+            "Several high-weight signals detected. Take time to review all "
+            "indicators carefully before making any payment."
         ),
     }.get(level, "")
 
@@ -37,20 +36,19 @@ def closing_line(level: str) -> str:
     """Single takeaway action line shown at the bottom of the result card."""
     return {
         "Very Low": (
-            "No strong signals detected. You can proceed with standard buying caution."
+            "No strong risk signals detected. Standard buying caution still applies."
         ),
         "Low": (
-            "Some minor signals were detected. Review the indicators above and verify "
-            "key details with the seller before buying."
+            "Minor observable signals were detected. Review the indicators above "
+            "and proceed with your own judgment."
         ),
         "Medium": (
-            "Some signals were detected. Review the indicators above and verify key "
+            "Multiple observable signals were detected. Consider verifying key "
             "details with the seller before buying."
         ),
         "High": (
-            "Multiple signals were detected. Take time to carefully review all "
-            "indicators above and verify product and seller details before "
-            "completing any payment."
+            "Several high-weight signals were detected. Take time to carefully "
+            "review all indicators above before completing any payment."
         ),
     }.get(level, "")
 
@@ -102,7 +100,7 @@ _CATEGORY_ACTIONS: Dict[str, List[str]] = {
 }
 
 _ELECTRONICS_KW = {
-    "phone", "laptop", "tablet", "headphone", "earphone", "charger", "cable",
+    "phone", "laptop", "tablet", "headphone", "earphone", "earbuds", "charger", "cable",
     "keyboard", "mouse", "monitor", "speaker", "camera", "smartwatch", "router",
     "powerbank", "power bank", "gadget", "electronic", "appliance", "aircon",
     "refrigerator", "television", " tv", "tv ", "printer", "projector",
@@ -118,6 +116,11 @@ _CLOTHING_KW = {
     "necklace", "ring",
 }
 
+_GENERIC_NO_BRAND_EXPECTED_KW = {
+    "charger", "cable", "adapter", "case", "cover", "protector", "holder",
+    "stand", "strap", "sticker", "clip", "pouch", "sleeve",
+}
+
 
 def _detect_product_category(product_name: str, description: str) -> str:
     """Roughly classify the product for context-aware recommended actions."""
@@ -131,19 +134,26 @@ def _detect_product_category(product_name: str, description: str) -> str:
     return "general"
 
 
+def _generic_no_brand_expected(product_name: str) -> bool:
+    normalized_name = product_name.lower().strip()
+    return any(kw in normalized_name for kw in _GENERIC_NO_BRAND_EXPECTED_KW)
+
+
 def build_product_notice(listing: Dict, breakdown: Dict[str, int]) -> Dict | None:
     desc = (listing.get("description") or "").lower()
     product_name = (listing.get("product_name") or "").strip()
     indicators: List[str] = []
+    category = _detect_product_category(product_name, desc)
+    brand_expected = category in {"electronics", "books", "clothing"} and not _generic_no_brand_expected(product_name)
 
-    if len(desc) > 20 and not any(k in desc for k in PRODUCT_KEYWORDS):
+    if brand_expected and len(desc) > 20 and not any(k in desc for k in PRODUCT_KEYWORDS):
         indicators.append("Description does not mention brand, publisher, or edition")
 
     price = listing.get("price")
-    if isinstance(price, (int, float)) and 0 < price < 200:
+    if isinstance(price, (int, float)) and 0 < price < 200 and brand_expected:
         indicators.append("Price is below typical category baseline")
 
-    if listing.get("platform") in ("shopee", "lazada") and listing.get("specifications") is None:
+    if listing.get("platform") in ("shopee", "lazada") and listing.get("specifications") is None and brand_expected:
         indicators.append("Specifications section is empty")
 
     # New: product name is missing or generic
@@ -221,7 +231,6 @@ def build_product_notice(listing: Dict, breakdown: Dict[str, int]) -> Dict | Non
     )
 
     # Category-aware recommended_actions list for low-price listings
-    category = _detect_product_category(product_name, desc)
     has_low_price = any("price" in i.lower() for i in indicators)
     recommended_actions = list(_CATEGORY_ACTIONS.get(category, _CATEGORY_ACTIONS["general"])) \
         if has_low_price else [recommended_action]
