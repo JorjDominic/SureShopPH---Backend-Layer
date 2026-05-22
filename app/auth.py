@@ -1,9 +1,12 @@
 """JWT verification + profile role checks."""
+import json
 import jwt
+import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.algorithms import ECAlgorithm
 
-from app.config import JWT_SECRET
+from app.config import JWT_SECRET, SUPABASE_URL
 from app.db.supabase_client import get_supabase
 from app.logging_config import get_logger
 
@@ -11,16 +14,56 @@ log = get_logger(__name__)
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+# In-memory cache: kid → EC public key. Populated on first request, survives for
+# the lifetime of the process (keys rotate rarely).
+_jwks_cache: dict[str, object] = {}
+
+
+def _get_ec_public_key(kid: str) -> object | None:
+    """Return the cached EC public key for kid, fetching JWKS if not yet cached."""
+    if kid in _jwks_cache:
+        return _jwks_cache[kid]
+    try:
+        resp = httpx.get(
+            f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json",
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        for key_data in resp.json().get("keys", []):
+            if key_data.get("kid") == kid:
+                public_key = ECAlgorithm.from_jwk(json.dumps(key_data))
+                _jwks_cache[kid] = public_key
+                return public_key
+        log.warning("auth: kid=%s not found in JWKS", kid)
+    except Exception as e:
+        log.warning("auth: JWKS fetch failed: %s", e.__class__.__name__)
+    return None
+
 
 def verify_token(token: str) -> str | None:
-    """Decode JWT. Logs the *category* of failure but never the secret/payload."""
+    """Decode JWT. Supports ES256 (current Supabase ECC key) and HS256 (legacy)."""
     try:
-        payload = jwt.decode(
-            token,
-            JWT_SECRET,
-            algorithms=["HS256"],
-            options={"verify_aud": False},
-        )
+        header = jwt.get_unverified_header(token)
+        alg = header.get("alg", "HS256")
+
+        if alg == "ES256":
+            kid = header.get("kid", "")
+            public_key = _get_ec_public_key(kid)
+            if public_key is None:
+                return None
+            payload = jwt.decode(
+                token,
+                public_key,
+                algorithms=["ES256"],
+                options={"verify_aud": False},
+            )
+        else:
+            payload = jwt.decode(
+                token,
+                JWT_SECRET,
+                algorithms=["HS256"],
+                options={"verify_aud": False},
+            )
         return payload.get("sub")
     except jwt.ExpiredSignatureError:
         log.info("auth: token expired")

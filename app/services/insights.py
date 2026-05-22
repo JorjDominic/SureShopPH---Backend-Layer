@@ -189,6 +189,28 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
             "other listings for buyer feedback is a useful alternative."
         ),
     },
+    "Seller account age and response rate not visible": {
+        "code": "seller_profile_unverifiable",
+        "category": "seller",
+        "severity": "low",
+        "tip": (
+            "This seller's account age and response rate were not visible on "
+            "the listing page and no platform badge confirms their standing. "
+            "Checking the seller's shop page directly can give you a better "
+            "picture of their history before purchasing."
+        ),
+    },
+    "Unverified listing: no recorded sales or buyer ratings": {
+        "code": "listing_no_history",
+        "category": "metadata",
+        "severity": "medium",
+        "tip": (
+            "This listing has no completed sales and no buyer ratings, "
+            "meaning there is no purchase history to assess. Consider "
+            "checking the seller's other listings for buyer feedback, or "
+            "purchasing elsewhere until some buyer history is available."
+        ),
+    },
     "No items sold on this listing": {
         "code": "sales_unavailable",
         "category": "metadata",
@@ -237,6 +259,78 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
             "The description looks like it may be auto-generated. Asking "
             "the seller for specific details (size, model, contents) can "
             "help confirm what's included."
+        ),
+    },
+    "Facebook Marketplace: no platform buyer protection or seller verification": {
+        "code": "fb_platform_risk",
+        "category": "metadata",
+        "severity": "low",
+        "tip": (
+            "Facebook Marketplace does not offer built-in buyer protection or "
+            "formal seller verification. This is noted as platform context — "
+            "it reflects the environment, not a finding specific to this seller."
+        ),
+    },
+    "Price Transparency Risk: single-digit price may be a placeholder — confirm actual price with seller": {
+        "code": "fb_price_placeholder_single",
+        "category": "metadata",
+        "severity": "medium",
+        "tip": (
+            "A single-digit price is almost certainly a placeholder set while "
+            "the seller arranges details. Message the seller to confirm the "
+            "real price before proceeding."
+        ),
+    },
+    "Price Transparency Risk: repeated-digit price pattern may indicate a placeholder — confirm actual price with seller": {
+        "code": "fb_price_placeholder_repeated",
+        "category": "metadata",
+        "severity": "medium",
+        "tip": (
+            "Prices like 1111 or 9999 are common placeholder values on "
+            "Facebook Marketplace. Confirm the actual price with the seller "
+            "before agreeing to any payment."
+        ),
+    },
+    "Price Transparency Risk: sequential-digit price may indicate a placeholder — confirm actual price with seller": {
+        "code": "fb_price_placeholder_sequential",
+        "category": "metadata",
+        "severity": "medium",
+        "tip": (
+            "Sequential prices like 1234 or 12345 are commonly used as "
+            "placeholder values. Ask the seller to confirm the real price "
+            "before making any payment."
+        ),
+    },
+    "Seller response time is slow": {
+        "code": "seller_response_slow",
+        "category": "seller",
+        "severity": "low",
+        "tip": (
+            "The seller's response time is listed as a few days or longer. "
+            "Send a message before ordering and factor in how long a reply "
+            "might take if you have questions or issues after purchase."
+        ),
+    },
+    "Unusually low rating coverage for sales volume": {
+        "code": "rating_coverage_low",
+        "category": "metadata",
+        "severity": "low",
+        "tip": (
+            "This listing has a large number of recorded sales but very few "
+            "buyer ratings. The gap between purchases and reviews is wider "
+            "than typical — read the available reviews carefully and consider "
+            "checking similar products for more feedback."
+        ),
+    },
+    "Soft persuasion language reinforces other risk signals in this listing": {
+        "code": "soft_bait_compound",
+        "category": "text",
+        "severity": "low",
+        "tip": (
+            "The description uses multiple soft persuasion words (such as "
+            '"sale", "mura", or "legit") alongside other flagged signals. '
+            "Taken alone these are common phrases — in combination with "
+            "other flags they add to the overall picture."
         ),
     },
 
@@ -319,8 +413,8 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
         "category": "url",
         "severity": "high",
         "tip": (
-            "This page is not using a secure (HTTPS) connection. Avoid "
-            "entering payment or account information here."
+            "This page is not using a secure (HTTPS) connection. "
+            "Entering payment or account information here is not recommended."
         ),
     },
     "Unusually deep subdomain": {
@@ -396,7 +490,7 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
     },
 
     # ---- Comments: fake review rules ----
-    "All comments are 5-star": {
+    "All rated reviews are exactly 5-star (suspiciously uniform)": {
         "code": "comments_all_5star",
         "category": "comments",
         "severity": "low",
@@ -478,7 +572,7 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
             "spread across different weeks or months for a more balanced picture."
         ),
     },
-    "No negative or mixed ratings detected among all reviews": {
+    "All collected reviews are 4–5 star — no critical ratings found": {
         "code": "comments_no_rating_diversity",
         "category": "comments",
         "severity": "medium",
@@ -575,7 +669,7 @@ RECOMMENDATIONS_BY_CODE: Dict[str, str] = {
     "specs_missing_shopee": "Request the missing specifications from the seller.",
     "url_malformed": "Type the platform's web address directly in the browser instead of clicking the link.",
     "url_typo": "Double-check the address bar — ensure you're on the official site before logging in or paying.",
-    "url_no_https": "Avoid entering payment or login details on a non-secure page.",
+    "url_no_https": "Entering payment or login details on a non-secure page is not recommended.",
     "url_deep_subdomain": "Verify you're on the official platform domain before continuing.",
     "comments_duplicate": "Look for reviews that describe specific product details rather than repeating phrases.",
     "comments_time_cluster": "Look for reviews spread across different dates for a more balanced view.",
@@ -597,6 +691,13 @@ RECOMMENDATIONS_BY_CODE: Dict[str, str] = {
     "comments_excessive_emoji": "Prioritize written reviews that describe the product or delivery experience.",
     "comments_forced_product_mention": "Look for reviews that describe a genuine personal experience rather than repeating keywords.",
     "comments_identical_sentence_end": "Seek out reviews with unique, specific detail — reviews ending with identical phrases are less informative.",
+    "fb_platform_risk": "Exercise the same precautions you would for any unverified online transaction — confirm item details and agree on payment method before committing.",
+    "fb_price_placeholder_single": "Message the seller to confirm the actual price before agreeing to anything.",
+    "fb_price_placeholder_repeated": "Ask the seller directly what the real price is — do not send any payment until you have a clear written answer.",
+    "fb_price_placeholder_sequential": "Confirm the real price in writing before proceeding.",
+    "seller_response_slow": "Factor in the seller's response time when planning your purchase — send your questions early.",
+    "rating_coverage_low": "Check the seller's overall profile for additional buyer feedback beyond this listing's reviews.",
+    "soft_bait_compound": "Compare the listing against similar items to see whether the claimed deal matches the market.",
 }
 
 
@@ -636,7 +737,7 @@ EXPLANATIONS_BY_CODE: Dict[str, str] = {
     "brand_vague": "Unspecified brand information makes it harder to verify the product's origin and authenticity. If the brand matters to you, ask the seller to confirm before ordering.",
     "url_malformed": "A URL that cannot be parsed cleanly may indicate you arrived via an unusual link. Type the platform's official web address directly into your browser rather than following external links.",
     "url_typo": "A web address that closely resembles but does not exactly match an official platform domain is a common technique used to misdirect buyers. Double-check the address bar before logging in or entering payment details.",
-    "url_no_https": "An unencrypted connection means your login and payment information is not protected. Do not enter any sensitive details on this page.",
+    "url_no_https": "An unencrypted connection means your login and payment information is not protected. Entering sensitive details on this page is not recommended.",
     "url_deep_subdomain": "An unusually complex URL is atypical for official platform listings. Verify that the domain in the address bar matches the platform's official web address.",
     "comments_duplicate": "Reviews that share nearly identical text are less likely to reflect independent personal buyer experiences. Look for reviews that describe specific product details — delivery time, packaging, condition.",
     "comments_time_cluster": "A concentration of reviews posted in a short window is unusual for organic buyer activity. Look for reviews spread across different dates for a more balanced view.",
@@ -659,6 +760,13 @@ EXPLANATIONS_BY_CODE: Dict[str, str] = {
     "comments_photo_only": "Photo-only reviews without written feedback provide limited context. Combine photo evidence with written reviews that describe the actual purchase experience.",
     "comments_excessive_emoji": "Reviews consisting mostly of emoji with little written text provide limited information. Prioritize written reviews that describe the product or delivery experience.",
     "rating_none": "Without any buyer ratings there is no purchase history to draw on. Looking at the seller's other listings for buyer feedback gives a better sense of their reliability.",
+    "fb_platform_risk": "Facebook Marketplace operates without the buyer protection guarantees of Shopee or Lazada. There is no platform-managed escrow, return guarantee, or formal seller verification process. This is noted as context for all FB listings.",
+    "fb_price_placeholder_single": "A single-digit price on Facebook Marketplace almost always means the seller has not yet set the real price. Do not assume this is the actual amount — confirm in writing before any payment.",
+    "fb_price_placeholder_repeated": "Repeated-digit prices like 1111 or 9999 are a well-known pattern for placeholder entries on Facebook Marketplace. Always confirm the seller's real asking price before making any payment.",
+    "fb_price_placeholder_sequential": "Sequential prices like 1234 or 123456 are frequently used as temporary placeholders. Confirm the real amount with the seller before proceeding.",
+    "seller_response_slow": "A seller whose response time is measured in days may be slower to address questions, shipping updates, or concerns. Sending your questions before ordering gives you time to receive a reply before committing.",
+    "rating_coverage_low": "When a listing shows many sales but very few reviews, most buyers did not leave feedback. This is not necessarily a problem — but it limits the usefulness of the ratings you can see.",
+    "soft_bait_compound": "Words like 'sale', 'mura', 'legit', or 'below SRP' are extremely common in Philippine online listings and are not individually meaningful. When several appear together alongside other flagged signals, the overall pattern is worth factoring into your decision.",
 }
 
 # ---------------------------------------------------------------------------
@@ -676,6 +784,7 @@ _CODE_WEIGHT_OVERRIDE: Dict[str, int] = {
     "comments_review_burst": 4,
     "urgency_language": 3, "price_low": 3, "rating_none": 3, "sales_zero": 3,
     "perfect_rating_few_reviews": 3, "comments_ml_signal": 3,
+    "fb_price_placeholder_single": 4, "fb_price_placeholder_repeated": 4, "fb_price_placeholder_sequential": 4,
 }
 
 # Plain-English description of each signal for use in the dynamic risk message.
@@ -714,17 +823,24 @@ _FLAG_PLAIN_NAMES: Dict[str, str] = {
     "comments_duplicate": "a high proportion of identical review texts",
     "comments_time_cluster": "several reviews posted within a 60-minute window",
     "comments_review_burst": "the majority of reviews posted within a single 7-day window",
-    "comments_all_5star": "all collected reviews showing a perfect 5-star rating",
+    "comments_all_5star": "all rated reviews are exactly 5-star (suspiciously uniform)",
     "comments_no_specifics": "reviews that do not mention specific product or delivery details",
     "comments_ml_signal": "review patterns that the classifier associates with elevated review inflation",
     "comments_rating_text_mismatch": "high-rated reviews containing language that suggests disappointment",
-    "comments_no_rating_diversity": "no negative or mixed ratings among all collected reviews",
+    "comments_no_rating_diversity": "all collected reviews are 4–5 star with no critical ratings",
     "comments_username_sequence": "reviewer usernames following sequential numbering patterns",
     "comments_forced_product_mention": "an unusual word repeated across the majority of reviews",
     "comments_identical_sentence_end": "many reviews ending with identical phrases",
     "comments_generic": "reviews dominated by short generic phrases",
     "comments_short": "reviews that are unusually short on average",
     "comments_bot_usernames": "several usernames matching bot-style patterns",
+    "fb_platform_risk": "a Facebook Marketplace listing with no platform buyer protection",
+    "fb_price_placeholder_single": "a price that appears to be a single-digit placeholder",
+    "fb_price_placeholder_repeated": "a price that appears to be a repeated-digit placeholder",
+    "fb_price_placeholder_sequential": "a price that appears to be a sequential-digit placeholder",
+    "seller_response_slow": "a seller with a slow listed response time",
+    "rating_coverage_low": "an unusually low review rate relative to the number of sales",
+    "soft_bait_compound": "soft persuasion language appearing alongside other flagged signals",
 }
 
 
@@ -745,10 +861,10 @@ CHECKLIST_BY_CODE: Dict[str, str] = {
     "perfect_rating_few_reviews": "Find a similar listing with more reviews and compare.",
     "urgency_language": "Pause — give yourself time to compare before deciding.",
     "promise_language": "Ask for proof of specific claims (e.g. authenticity card, warranty).",
-    "payment_pressure": "Pay through the platform's official checkout — avoid direct GCash or bank transfers.",
+    "payment_pressure": "Using the platform's official checkout offers more buyer protection than direct GCash or bank transfers.",
     "url_malformed": "Type the official platform URL into the browser yourself.",
     "url_typo": "Verify the domain in the address bar matches the official platform.",
-    "url_no_https": "Do not enter login or payment details on this page.",
+    "url_no_https": "Entering login or payment details on this page is not recommended.",
     "comments_duplicate": "Skim reviews looking for unique, detail-rich entries before relying on the rating.",
     "comments_time_cluster": "Look for reviews posted across different weeks or months.",
     "comments_unverified": "Filter for verified-purchase reviews if the platform allows.",
@@ -759,6 +875,10 @@ CHECKLIST_BY_CODE: Dict[str, str] = {
     "comments_username_sequence": "Read at least 5 reviews and assess their content independently of the username.",
     "comments_forced_product_mention": "Look for at least 3 reviews that describe a real use experience.",
     "comments_identical_sentence_end": "Find reviews that end differently and describe the product specifically.",
+    "fb_price_placeholder_single": "Confirm the actual price with the seller in writing before sending any payment.",
+    "fb_price_placeholder_repeated": "Ask the seller directly for the real price — do not assume the displayed amount is correct.",
+    "fb_price_placeholder_sequential": "Get the confirmed price in writing before proceeding with payment.",
+    "soft_bait_compound": "Compare this listing's price and claims against two or three similar listings.",
 }
 
 
@@ -869,6 +989,22 @@ PLATFORM_FLAG_LABELS: Dict[tuple, str] = {
     ),
     ("No product images provided", "facebook"): (
         "This Facebook Marketplace listing has no photos attached, making it difficult to verify the item."
+    ),
+    ("Facebook Marketplace: no platform buyer protection or seller verification", "facebook"): (
+        "Facebook Marketplace does not offer the buyer protections available on Shopee or Lazada — "
+        "there is no platform-managed escrow, return guarantee, or formal seller verification."
+    ),
+    ("Price Transparency Risk: single-digit price may be a placeholder — confirm actual price with seller", "facebook"): (
+        "The listed price is a single digit, which is almost certainly a placeholder — "
+        "confirm the real price with the seller before proceeding."
+    ),
+    ("Price Transparency Risk: repeated-digit price pattern may indicate a placeholder — confirm actual price with seller", "facebook"): (
+        "The listed price follows a repeated-digit pattern (e.g. 1111, 9999), a common placeholder "
+        "on Facebook Marketplace — confirm the actual price with the seller."
+    ),
+    ("Price Transparency Risk: sequential-digit price may indicate a placeholder — confirm actual price with seller", "facebook"): (
+        "The listed price uses a sequential number pattern (e.g. 1234, 12345), a common placeholder "
+        "on Facebook Marketplace — confirm the actual price with the seller."
     ),
 }
 
@@ -1173,8 +1309,8 @@ def comment_pattern_summary(
 
     flag_set = set(flags)
     has_5star = bool(flag_set & {
-        "All comments are 5-star",
-        "No negative or mixed ratings detected among all reviews",
+        "All rated reviews are exactly 5-star (suspiciously uniform)",
+        "All collected reviews are 4–5 star — no critical ratings found",
     })
     has_dup = "High duplicate-text ratio across comments" in flag_set
     has_no_specifics = "Comments lack shipping or product specifics" in flag_set

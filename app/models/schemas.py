@@ -172,7 +172,7 @@ class ScoreBreakdown(BaseModel):
     seller_attributes: int
     listing_metadata: int
     textual_nlp: int
-    url_domain: int
+    url_domain: int = 0
 
 
 class FlagDetail(BaseModel):
@@ -211,18 +211,6 @@ class CommentSummaryDetail(BaseModel):
     no_text_count: int = 0
     rating_diversity: bool = True
 
-
-class CommentThemeItem(BaseModel):
-    theme: str
-    label: str
-    mention_count: int
-    sentiment: Literal["positive", "negative", "mixed"]
-
-
-class ReviewThemes(BaseModel):
-    themes_detected: List[CommentThemeItem] = Field(default_factory=list)
-    summary_text: str = ""
-    disclaimer: str = ""
 
 
 class ScanCompleteness(BaseModel):
@@ -266,6 +254,7 @@ class ListingAnalysisResponse(BaseModel):
     scan_completeness: Optional[ScanCompleteness] = None
     scan_mode_note: Optional[str] = None
     closing_line: str = ""
+    risk_message_source: Literal["groq", "rule_based"] = "rule_based"
     scan_timestamp: str
     scanned_at_iso: Optional[str] = None
 
@@ -277,6 +266,7 @@ class CommentsAnalysisResponse(BaseModel):
     fake_review_pct: int
     confidence: str
     comments_analyzed: int
+    no_comments_available: bool = False
     pages_analyzed: int
     total_pages: int
     coverage_pct: int
@@ -289,13 +279,12 @@ class CommentsAnalysisResponse(BaseModel):
     review_diversity_score: int = 100
     review_diversity_explanation: str = "Measures variety in review content and rating distribution. Lower scores may indicate repetitive or uniform reviews."
     pages_coverage_note: Optional[str] = None
-    dominant_sentiment: str = "positive"
+    dominant_sentiment: str = "none"
     comment_pattern_summary: str = ""
     small_sample_warning: Optional[str] = None
     small_sample_flag: bool = False
     sample_size_explanation: Optional[str] = None
     comment_weight_note: Optional[str] = None
-    review_themes: Optional[ReviewThemes] = None
     scanned_at_iso: Optional[str] = None
 
 
@@ -304,6 +293,19 @@ class DeepAnalysisResponse(BaseModel):
     comments: CommentsAnalysisResponse
     combined_risk_score: int
     combined_risk_level: str
+
+
+class DomainInfo(BaseModel):
+    host: Optional[str] = None
+    domain_age_days: Optional[int] = None
+    creation_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+    registrar: Optional[str] = None
+    country: Optional[str] = None
+    ip_address: Optional[str] = None
+    privacy_protected: bool = False
+    lookup_failed: bool = False
+    skip_reason: Optional[str] = None
 
 
 class UrlSafetyResponse(BaseModel):
@@ -315,3 +317,4 @@ class UrlSafetyResponse(BaseModel):
     flag_details: List[FlagDetail] = Field(default_factory=list)
     recommendations: List[str] = Field(default_factory=list)
     verify_checklist: List[str] = Field(default_factory=list)
+    domain_info: Optional[DomainInfo] = None

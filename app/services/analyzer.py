@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from app.services.rule_engine import score_seller, score_metadata, score_text, score_url
+from app.services.rule_engine import score_seller, score_metadata, score_text
 from app.services.confidence import compute_confidence
 from app.services.score_calculator import (
     band, risk_message, build_product_notice, platform_signals,
@@ -15,6 +15,7 @@ from app.services.insights import (
     contextual_risk_message, dynamic_risk_message, enriched_breakdown,
 )
 from app.services.score_calculator import closing_line as _closing_line
+from app.services.groq_summarizer import generate_listing_summary
 from app.config import CONFIDENCE_TRUST
 
 
@@ -39,7 +40,6 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
     seller_score, seller_flags = score_seller(listing)
     meta_score, meta_flags = score_metadata(listing)
     text_score, text_flags, triggered_by = score_text(listing, nlp_hits=nlp_hits)
-    url_score, url_flags = score_url(listing.get("url") or "")
 
     # Apply confidence-aware trust multipliers per category. A flag firing on
     # a low-confidence extracted field is worth less than one firing on a
@@ -52,17 +52,27 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
     meta_score = int(round(meta_score * meta_trust))
     text_score = int(round(text_score * text_trust))
 
-    total = seller_score + meta_score + text_score + url_score
+    total = seller_score + meta_score + text_score
     total = max(0, min(total, 100))
-    level, color = band(total)
 
-    flags = seller_flags + meta_flags + text_flags + url_flags
+    flags = seller_flags + meta_flags + text_flags
+
+    # Compound: no buyer history at all — zero sales combined with no ratings
+    # represents complete absence of purchase record. This fires after category
+    # caps so the cumulative uncertainty is reflected in the total score.
+    if (
+        "Product has no ratings yet" in flags
+        and "Zero recorded sales" in flags
+    ):
+        total = min(total + 18, 100)
+        flags = ["Unverified listing: no recorded sales or buyer ratings"] + flags
+
+    level, color = band(total)
 
     breakdown = {
         "seller_attributes": seller_score,
         "listing_metadata": meta_score,
         "textual_nlp": text_score,
-        "url_domain": url_score,
     }
 
     confidence = compute_confidence(
@@ -104,11 +114,48 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
     checklist = build_verify_checklist(flags, level)
     checklist_total = len(build_verify_checklist(flags, level, limit=999))
 
+    # Build description pattern summary for Groq — only include matched phrases
+    _desc_patterns: Dict[str, Any] = {}
+    if nlp_hits.get("urgency_match"):
+        _desc_patterns["urgency_phrase_found"] = nlp_hits["urgency_match"]
+    if nlp_hits.get("promise_match"):
+        _desc_patterns["over_promise_phrase_found"] = nlp_hits["promise_match"]
+    if nlp_hits.get("payment_match"):
+        _desc_patterns["payment_warning_phrase_found"] = nlp_hits["payment_match"]
+    if nlp_hits.get("vague_match"):
+        _desc_patterns["vague_brand_phrase_found"] = nlp_hits["vague_match"]
+
+    _raw_desc = (listing.get("description") or "").strip()
+
+    groq_listing_ctx = {
+        "platform": listing.get("platform", ""),
+        "risk_level": level,
+        "risk_score": total,
+        "confidence": confidence["level"],
+        "score_breakdown": {
+            "seller_attributes": {"score": seller_score, "max": 25},
+            "listing_metadata": {"score": meta_score, "max": 25},
+            "text_nlp": {"score": text_score, "max": 35},
+        },
+        "flags": flags,
+        "positive_signals": [s["message"] for s in positive],
+        "seller_age": listing.get("shop_age"),
+        "seller_rating": listing.get("seller_rating"),
+        "listing_rating_count": listing.get("rating_count"),
+        "listing_sold_count": listing.get("sold_count"),
+        "price": listing.get("price"),
+        "image_count": listing.get("image_count"),
+        "description_snippet": _raw_desc[:280] if _raw_desc else None,
+        "description_patterns": _desc_patterns if _desc_patterns else None,
+    }
+    groq_risk_message = generate_listing_summary(groq_listing_ctx)
+
     return {
         "risk_score": total,
         "risk_level": level,
         "risk_color": color,
-        "risk_message": dynamic_risk_message(flags, level),
+        "risk_message": groq_risk_message or dynamic_risk_message(flags, level),
+        "risk_message_source": "groq" if groq_risk_message else "rule_based",
         "closing_line": _closing_line(level),
         "flags": flags,
         "flag_details": enrich_flags(flags, plat, triggered_by=triggered_by),

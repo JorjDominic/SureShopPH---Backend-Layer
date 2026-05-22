@@ -46,7 +46,15 @@ async def analyze_listing(
         "flags": result["flags"],
         "confidence_level": result["confidence"]["level"],
         "confidence_pct": result["confidence"]["percentage"],
-        "scan_mode": "normal",
+        "scan_mode": "extension",
+        "notes": result.get("risk_message"),
+        "raw_data": {
+            "flag_details": result.get("flag_details"),
+            "positive_signals": result.get("positive_signals"),
+            "recommendations": result.get("recommendations"),
+            "verify_checklist": result.get("verify_checklist"),
+            "risk_message_source": result.get("risk_message_source"),
+        },
     })
     background.add_task(maybe_save_high_risk, {
         "platform": payload.get("platform"),

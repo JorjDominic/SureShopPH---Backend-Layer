@@ -141,6 +141,30 @@ def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
     if any("preferred" in b for b in badge_set):
         score -= 5
 
+    # Shopee: seller profile unverifiable — only the name is known, no account
+    # age or response rate, and no platform badge to confirm their standing.
+    # Excludes verified/mall/preferred sellers whose details are simply not
+    # surfaced on the product page.
+    has_positive_badge = (
+        listing.get("is_shopee_mall")
+        or any(b in badge_set for b in ("preferred", "top seller", "lazmall"))
+    )
+    if (
+        platform == "shopee"
+        and listing.get("seller_name")
+        and listing.get("shop_age") is None
+        and listing.get("response_rate") is None
+        and not has_positive_badge
+    ):
+        score += 6
+        flags.append("Seller account age and response rate not visible")
+
+    # Slow response time despite no other positive signals
+    rt = str(listing.get("response_time") or "").lower()
+    if re.search(r"\b(few\s+days?|within\s+a\s+week|week|month|rarely|seldom)\b", rt):
+        score += 5
+        flags.append("Seller response time is slow")
+
     score = max(0, min(score, 25))
     return score, flags
 
@@ -198,7 +222,26 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             score += 8
             flags.append("No items sold on this listing")
 
+        # Sold/rating mismatch — many sales but almost no ratings suggests
+        # ratings were suppressed, reset, or the listing is a shell.
+        rating_count = listing.get("rating_count")
+        if sold and sold > 500 and rating_count is not None:
+            try:
+                coverage = int(rating_count) / sold
+                if coverage < 0.01:
+                    score += 10
+                    flags.append("Very few ratings relative to sales volume")
+                elif coverage < 0.03 and sold > 1000:
+                    score += 5
+                    flags.append("Unusually low rating coverage for sales volume")
+            except (ValueError, ZeroDivisionError, TypeError):
+                pass
+
     if platform == "facebook":
+        # Platform baseline — FB has no buyer protection or seller verification.
+        score += 10
+        flags.append("Facebook Marketplace: no platform buyer protection or seller verification")
+
         if listing.get("price_is_variant"):
             score += 5
             flags.append("Price shown as a variant range")
@@ -214,6 +257,30 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             score += 8
             flags.append("Description appears auto-generated only")
 
+        # Price transparency — placeholder / bait prices common on FB Marketplace.
+        # Uses obvious anomaly detection only; avoids strong fraud claims.
+        if price is not None and isinstance(price, (int, float)) and price > 0:
+            try:
+                _p = str(int(float(price)))
+            except (ValueError, TypeError):
+                _p = ""
+            if _p:
+                if len(_p) == 1:
+                    score += 6
+                    flags.append(
+                        "Price Transparency Risk: single-digit price may be a placeholder — confirm actual price with seller"
+                    )
+                elif re.match(r'^(\d)\1+$', _p):
+                    score += 8
+                    flags.append(
+                        "Price Transparency Risk: repeated-digit price pattern may indicate a placeholder — confirm actual price with seller"
+                    )
+                elif _p in ("123", "1234", "12345", "123456", "1234567"):
+                    score += 8
+                    flags.append(
+                        "Price Transparency Risk: sequential-digit price may indicate a placeholder — confirm actual price with seller"
+                    )
+
     score = max(0, min(score, 25))
     return score, flags
 
@@ -223,21 +290,31 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
 URGENCY_PATTERNS = [
     r"\blimited\s+stocks?\b", r"\btoday\s+only\b", r"\bbili\s+na\b", r"\bhuli na\b",
     r"\blast\s+\d+\b", r"\brush\b", r"\bhurry\b", r"\bact\s+now\b",
-    # Additional Filipino scarcity / urgency phrases
+    # Filipino scarcity / urgency phrases
     r"\bkunin\s+na\b", r"\bpaubos\s+na\b", r"\blast\s+piece\b", r"\bfew\s+left\b",
     r"\bsale\s+na\b", r"\bsale\s+ends?\b", r"\bflash\s+sale\b", r"\blimitado\b",
     r"\bhuling\s+(?:piraso|stock)\b", r"\bsolid\s+na\b", r"\blimited\s+na\b",
     r"\bkonti\s+na\s+lang\b", r"\bmaubusan\b", r"\bmabilis\s+maubos\b",
+    # Price-bait and time-pressure additions
+    r"\bpresyo\s+na\s+ito\b", r"\bsulit\s+na\s+sulit\b",
+    r"\bhindi\s+na\s+mababawasan\b", r"\bbest\s+price\b",
+    r"\bfor\s+today\s+only\b", r"\bpromo\s+price\b", r"\bdeal\s+of\s+the\s+day\b",
+    r"\bhuling\s+araw\b", r"\bsale\s+hanggang\b",
 ]
 PROMISE_PATTERNS = [
     r"\b100\s*%\s*legit\b", r"\bguaranteed\b", r"\bno\s+issues?\b",
     r"\boriginal\s*na\s*original\b", r"\bauthentic\s*po\b",
-    # Additional over-promising phrases
+    # Over-promising phrases
     r"\boriginal\s+talaga\b", r"\bcertified\s+original\b", r"\bseal[ed]*\b",
     r"\bbrand\s+new\s+sealed\b", r"\b100%\s*original\b", r"\blegit\s+seller\b",
     r"\btested\s+and\s+working\b", r"\bno\s+defect\b", r"\bperfect\s+condition\b",
     r"\btotoo\s+na\b", r"\boriginal\s+brand\b", r"\blegit\s+po\b",
     r"\blegit\s+talaga\b", r"\b200%\s*legit\b", r"\bproven\s+quality\b",
+    # Brand impersonation / fake authority signals
+    r"\bofficial\s+store\b", r"\bauthorized\s+reseller\b",
+    r"\bdirect\s+from\s+(?:supplier|factory|manufacturer|china)\b",
+    r"\bimported\s+from\b", r"\bsame\s+as\s+(?:original|branded)\b",
+    r"\bhigh\s+(?:copy|replica|class\s+a)\b", r"\b1:1\s*(?:copy|replica)?\b",
 ]
 PAYMENT_PATTERNS = [
     r"\bcod\s+only\b", r"\bgcash\s+muna\b", r"\bno\s+returns?\b",
@@ -326,6 +403,19 @@ def score_text(listing: Dict[str, Any], nlp_hits: Dict[str, object] | None = Non
     specs = listing.get("specifications")
     # Specs absence is surfaced as a product notice (score_calculator.py),
     # not as a scored flag — removes noise for listings that simply hide specs.
+
+    # Soft bait language — words like "sale", "legit", "below SRP" are weak on
+    # their own but amplify concern when 2+ appear alongside another fired flag.
+    SOFT_BAIT = [
+        r"\bsale\b", r"\bbig\s+(?:sale|discount)\b", r"\bdiscounted?\b",
+        r"\bbelow\s+srp\b", r"\bbelow\s+price\b", r"\bcheap\b",
+        r"\bmura\b", r"\bsulit\b", r"\blegit\b", r"\bmas\s+mura\b",
+    ]
+    if flags and desc:
+        _soft = sum(1 for p in SOFT_BAIT if re.search(p, desc, re.IGNORECASE))
+        if _soft >= 2:
+            score += 5
+            flags.append("Soft persuasion language reinforces other risk signals in this listing")
 
     score = max(0, min(score, 35))
     return score, flags, triggered_by

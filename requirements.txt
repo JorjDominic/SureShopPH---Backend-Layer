@@ -2,7 +2,8 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.2
 supabase==2.15.2
 python-dotenv==1.1.0
-pyjwt==2.10.1
+pyjwt[crypto]==2.10.1
+cryptography>=42.0
 spacy>=3.7,<3.8
 calamanCy
 scikit-learn==1.6.1
@@ -10,6 +11,7 @@ joblib==1.4.2
 pandas==2.2.3
 numpy==1.26.4
 python-multipart==0.0.20
+python-whois==0.9.4
 
 # ────────────────── Testing ──────────────────
 pytest==8.3.5

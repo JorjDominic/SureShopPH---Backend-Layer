@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 # Load .env from the backend root regardless of current working directory.
 _ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
-load_dotenv(dotenv_path=_ENV_PATH)
+load_dotenv(dotenv_path=_ENV_PATH, override=True)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
@@ -16,6 +16,11 @@ APP_VERSION = "1.1.0"
 
 # ---------- Groq summary generation ----------
 ENABLE_GROQ_COMMENT_SUMMARY = os.getenv("ENABLE_GROQ_COMMENT_SUMMARY", "false").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+# When enabled, generate_listing_summary and generate_deep_summary call Groq for
+# insightful explanations instead of using the rule-built template fallback.
+ENABLE_GROQ_LISTING_SUMMARY = os.getenv("ENABLE_GROQ_LISTING_SUMMARY", "false").strip().lower() in {
     "1", "true", "yes", "on",
 }
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -47,9 +52,9 @@ HIGH_RISK_PERSIST_THRESHOLD = int(os.getenv("HIGH_RISK_PERSIST_THRESHOLD", "60")
 # Single source of truth — referenced by score_calculator.band() and deep.py.
 RISK_BANDS = [
     (76, 100, "High", "red"),
-    (51, 75, "Medium", "orange"),
-    (26, 50, "Low", "yellow"),
-    (0, 25, "Very Low", "green"),
+    (41, 75, "Medium", "orange"),
+    (21, 40, "Low", "yellow"),
+    (0, 20, "Very Low", "green"),
 ]
 
 # Deep-scan blend weights (must sum to 1.0)

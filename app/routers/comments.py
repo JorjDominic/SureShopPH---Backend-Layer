@@ -74,8 +74,10 @@ def analyze_comments_payload(payload: CommentsPayload) -> dict:
     diversity_score = max(0, diversity_score)
 
     # ---------- Dominant sentiment ----------
-    if bot >= 0.6 or fake >= 0.6:
-        dominant_sentiment = "suspicious"
+    if n == 0:
+        dominant_sentiment = "none"
+    elif bot >= 0.6 or fake >= 0.6:
+        dominant_sentiment = "mixed"
     elif bot >= 0.3 or fake >= 0.3:
         dominant_sentiment = "mixed"
     else:
@@ -163,7 +165,8 @@ def analyze_comments_payload(payload: CommentsPayload) -> dict:
     }
 
     local_summary = comment_summary(bot, fake, flags, n)
-    generated_summary = generate_comment_summary({
+    # Skip Groq call when no comments were provided — nothing to summarise
+    generated_summary = None if n == 0 else generate_comment_summary({
         "comments_analyzed": n,
         "bot_likelihood": round(bot, 3),
         "fake_review_likelihood": round(fake, 3),
@@ -182,7 +185,7 @@ def analyze_comments_payload(payload: CommentsPayload) -> dict:
             "and navigate through more comment pages to improve the reliability of this assessment."
             if n < 10 else None
         ),
-    })
+    }) if n > 0 else None
 
     if generated_summary:
         summary_text = generated_summary
@@ -198,6 +201,7 @@ def analyze_comments_payload(payload: CommentsPayload) -> dict:
         "fake_review_pct": int(round(fake * 100)),
         "confidence": confidence,
         "comments_analyzed": n,
+        "no_comments_available": n == 0,
         "pages_analyzed": payload.page_number,
         "total_pages": payload.total_pages,
         "coverage_pct": min(100, max(0, coverage_pct)),
@@ -224,7 +228,6 @@ def analyze_comments_payload(payload: CommentsPayload) -> dict:
         "review_diversity_score": diversity_score,
         "pages_coverage_note": pages_coverage_note,
         "dominant_sentiment": dominant_sentiment,
-        "review_themes": extract_comment_themes(raw),
         "scanned_at_iso": datetime.now(timezone.utc).isoformat(),
     }
 

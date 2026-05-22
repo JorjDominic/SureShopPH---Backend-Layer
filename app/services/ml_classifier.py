@@ -5,6 +5,7 @@ import pathlib
 import re
 from collections import Counter
 from datetime import datetime
+from difflib import SequenceMatcher
 from typing import Any, Dict, List, Tuple
 
 # Resolve relative to the project root so the path is correct regardless of
@@ -49,6 +50,16 @@ GENERIC_PHRASES = [
     # Tagalog promotional spam phrases
     "sulit", "worth it", "panalo", "swak", "bilhin na", "mabilis dumating",
     "ganda ng quality", "highly recommend", "must buy",
+    # Additional Filipino/Taglish generic phrases common in Shopee PH reviews
+    "perfect", "satisfied", "no issues", "solid", "authentic", "original",
+    "five stars", "5 stars", "love it", "love this", "amazing", "excellent",
+    "will order again", "mag-order ulit", "maganda", "mabilis", "ang ganda",
+    "as expected", "no problem", "no complaints", "super nice", "super legit",
+    "ganda", "ayos", "okay lang", "ok lang", "nice naman", "legit seller",
+    "fast", "legit po", "worth the price", "quality is good", "good quality",
+    "product is good", "item is good", "item received", "goods received",
+    "exactly as", "exactly what", "no regrets", "highly recommended",
+    "best seller", "shipping was fast", "delivery was fast",
 ]
 
 # Pattern for bot-style usernames: user12345, buyer_abc123, t****r
@@ -126,17 +137,17 @@ def bot_likelihood(comments: List[Dict[str, Any]]) -> Tuple[float, List[str], Di
         if not burst_found and dts_valid:
             pass  # handled below
 
-    # Average length
+    # Average length — Filipino reviews are often short (10–25 chars); raise threshold
     avg_len = sum(len(t) for t in texts) / n
     stats["avg_length"] = round(avg_len, 1)
-    if avg_len < 15:
+    if avg_len < 25:
         score += 0.4
         flags.append("Average comment length is very short")
 
-    # Generic phrases
+    # Generic phrases — lowered threshold to catch typical PH review patterns
     generic_hits = sum(1 for t in texts if any(p in t for p in GENERIC_PHRASES))
     stats["generic_count"] = generic_hits
-    if n and generic_hits / n > 0.5:
+    if n and generic_hits / n > 0.35:
         score += 0.3
         flags.append("Generic phrases dominate comments")
 
@@ -174,7 +185,40 @@ def bot_likelihood(comments: List[Dict[str, Any]]) -> Tuple[float, List[str], Di
         below_4 = sum(1 for c in rated_all if c["rating_stars"] < 4)
         if below_4 == 0:
             score += 0.25
-            flags.append("No negative or mixed ratings detected among all reviews")
+            flags.append("All collected reviews are 4–5 star — no critical ratings found")
+
+        # High 1-star ratio among collected comments
+        one_star = sum(1 for c in rated_all if c["rating_stars"] == 1)
+        one_star_ratio = one_star / len(rated_all)
+        if one_star_ratio > 0.35:
+            score += 0.5
+            flags.append("Very high proportion of 1-star reviews among collected comments")
+        elif one_star_ratio > 0.20:
+            score += 0.3
+            flags.append("High proportion of 1-star reviews among collected comments")
+
+    # Fuzzy duplicate detection — catches near-identical reviews that differ by
+    # only a word or two (exact-duplicate check above misses these).
+    # Cap pairwise comparisons at 30 reviews to keep O(n²) bounded.
+    if n >= 3:
+        sample = texts[:30]
+        pairs = [(i, j) for i in range(len(sample)) for j in range(i + 1, len(sample))]
+        similar = sum(
+            1 for i, j in pairs
+            if SequenceMatcher(None, sample[i], sample[j]).ratio() > 0.80
+        )
+        if pairs and similar / len(pairs) > 0.35:
+            score += 0.35
+            flags.append("High near-duplicate text similarity across reviews")
+
+    # Uniform review length — bots tend to post reviews of very similar lengths.
+    # Bucket lengths to the nearest 10 chars; flag when one bucket dominates.
+    if n >= 5:
+        length_buckets = Counter(round(len(t) / 10) * 10 for t in texts)
+        top_bucket_ratio = length_buckets.most_common(1)[0][1] / n
+        if top_bucket_ratio > 0.70:
+            score += 0.2
+            flags.append("Review lengths are suspiciously uniform")
 
     return min(score, 1.0), flags, stats
 
@@ -219,21 +263,26 @@ def _fake_review_rules(comments: List[Dict[str, Any]], flags: List[str]) -> floa
     five_star = sum(1 for c in rated if c.get("rating_stars") == 5)
     if n_rated > 0 and five_star / n_rated == 1.0:
         score += 0.3
-        flags.append("All comments are 5-star")
+        flags.append("All rated reviews are exactly 5-star (suspiciously uniform)")
 
     texts = [(c.get("text") or "").lower() for c in comments]
     raw_texts = [(c.get("text") or "") for c in comments]
 
     generic_hits = sum(1 for t in texts if any(p in t for p in GENERIC_PHRASES))
-    if generic_hits / n > 0.6:
+    if generic_hits / n > 0.45:
         score += 0.3
         flags.append("Generic phrases dominate comments")
 
+    # Includes Tagalog equivalents: produkto, kulay, sukat, kalidad, delivery
     no_specifics = sum(
         1 for t in texts
-        if not re.search(r"(ship|deliver|courier|product|item|color|size|quality)", t)
+        if not re.search(
+            r"(ship|deliver|courier|product|item|color|size|quality"
+            r"|produkto|kulay|sukat|kalidad|pagpadala|barya|delivery)",
+            t,
+        )
     )
-    if no_specifics / n > 0.7:
+    if no_specifics / n > 0.6:
         score += 0.2
         flags.append("Comments lack shipping or product specifics")
 
@@ -252,21 +301,26 @@ def _fake_review_rules(comments: List[Dict[str, Any]], flags: List[str]) -> floa
         score += 0.2
         flags.append("Many 5-star reviews are single-word")
 
-    # No verified-purchase tag
-    if any("verified" in c for c in comments):
-        unverified = sum(1 for c in comments if not c.get("verified"))
-        if unverified / n > 0.7:
-            score += 0.2
-            flags.append("Most reviews are not verified purchases")
-
-    # Photo-only (image present but text empty/very short)
-    photo_only = sum(
+    # Short reviews without any product-specific detail
+    short_vague = sum(
         1 for c, t in zip(comments, texts)
-        if (c.get("has_image") or c.get("image_url")) and len(t) < 5
+        if len(t.split()) <= 3 and not re.search(
+            r"(ship|deliver|product|item|color|size|quality|produkto|kalidad)", t
+        )
     )
-    if photo_only / n > 0.3:
+    if n and short_vague / n > 0.5:
         score += 0.15
-        flags.append("Multiple photo-only reviews with no text")
+        flags.append("Many reviews are very short with no product details")
+
+    # Meaningless reviews — no word longer than 4 characters and under 15 chars total.
+    # Catches emoji-only, single-letter strings, and placeholder noise.
+    meaningless = sum(
+        1 for t in texts
+        if len(t.strip()) < 15 or not re.search(r"\b\w{5,}\b", t)
+    )
+    if n and meaningless / n > 0.5:
+        score += 0.2
+        flags.append("Majority of reviews contain no meaningful words")
 
     # Rating-text mismatch — 5-star review containing clearly negative language
     NEGATIVE_WORDS = [

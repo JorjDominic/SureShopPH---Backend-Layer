@@ -207,8 +207,8 @@ def build_product_notice(listing: Dict, breakdown: Dict[str, int]) -> Dict | Non
             "what you are buying."
         ),
         "Listing has no images and no description": (
-            "Do not purchase without seeing photos and a written description of "
-            "the actual item. Ask the seller to provide both before proceeding."
+            "Consider requesting photos and a written description of the actual "
+            "item from the seller before proceeding."
         ),
         "Item condition is not specified by the seller": (
             "Ask the seller whether the item is brand new, used, or refurbished "
@@ -365,6 +365,11 @@ _FLAG_CATEGORY_HINTS: Dict[str, str] = {
     "domain": "url_domain",
     "typosquat": "url_domain",
     "http": "url_domain",
+    "price transparency": "listing_metadata",
+    "platform buyer protection": "listing_metadata",
+    "rating coverage": "listing_metadata",
+    "response time is slow": "seller_attributes",
+    "soft persuasion": "textual_nlp",
 }
 
 

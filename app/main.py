@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Callable
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
     # the first request with a cryptic DB/JWT error.
     validate_env()
     log.info("Starting %s %s", APP_NAME, APP_VERSION)
+    log.info("CORS allowed origins: %s", CORS_ALLOW_ORIGINS)
     # Preload NLP model so first user does not pay the load cost
     try:
         from app.services import nlp_engine
@@ -70,6 +72,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
+    allow_private_network=True,
 )
 
 
@@ -152,6 +155,12 @@ app.include_router(reports.router)
 app.include_router(admin.router)
 app.include_router(auth.router)
 app.include_router(training.router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    log.warning("422 validation error on %s %s: %s", request.method, request.url.path, exc.errors())
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 if __name__ == "__main__":

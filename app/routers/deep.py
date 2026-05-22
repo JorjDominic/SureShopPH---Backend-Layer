@@ -13,10 +13,12 @@ from app.models.schemas import CommentsPayload
 from app.rate_limit import rate_limit_analyze
 from app.routers.comments import analyze_comments_payload
 from app.services.analyzer import analyze_listing_payload
+from app.services.nlp_engine import detect_patterns
 from app.services.score_calculator import band, risk_message
 from app.services.insights import (
     contextual_risk_message, build_recommendations, build_verify_checklist,
 )
+from app.services.groq_summarizer import generate_deep_summary
 
 router = APIRouter(prefix="/analyze", tags=["analyze"])
 log = get_logger(__name__)
@@ -59,19 +61,72 @@ async def analyze_deep(
     listing_result = analyze_listing_payload(listing_in)
     comments_result = analyze_comments_payload(CommentsPayload(**comments_in))
 
+    # NLP pattern matches from description for Groq context
+    _nlp_hits = detect_patterns(listing_in.get("description") or "")
+    _desc_patterns: dict = {}
+    if _nlp_hits.get("urgency_match"):
+        _desc_patterns["urgency_phrase_found"] = _nlp_hits["urgency_match"]
+    if _nlp_hits.get("promise_match"):
+        _desc_patterns["over_promise_phrase_found"] = _nlp_hits["promise_match"]
+    if _nlp_hits.get("payment_match"):
+        _desc_patterns["payment_warning_phrase_found"] = _nlp_hits["payment_match"]
+    if _nlp_hits.get("vague_match"):
+        _desc_patterns["vague_brand_phrase_found"] = _nlp_hits["vague_match"]
+    _raw_desc = (listing_in.get("description") or "").strip()
+
     # Blend weights from config (must sum to ~1)
     bot_pct = comments_result["bot_likelihood"]
     fake_pct = comments_result["fake_review_likelihood"]
     comment_weight = (bot_pct + fake_pct) / 2  # 0..1
-    combined = int(round(
-        listing_result["risk_score"] * DEEP_LISTING_WEIGHT
-        + comment_weight * 100 * DEEP_COMMENTS_WEIGHT
-    ))
+    n_comments = comments_result.get("comments_analyzed", 0)
+
+    if n_comments == 0:
+        # No reviews available — applying the formula would silently discount the
+        # listing score by the comment weight (e.g. 35 × 0.7 = 24.5).
+        # Zero reviews is a data gap, not evidence of safety; use listing score as-is.
+        combined = listing_result["risk_score"]
+    else:
+        combined = int(round(
+            listing_result["risk_score"] * DEEP_LISTING_WEIGHT
+            + comment_weight * 100 * DEEP_COMMENTS_WEIGHT
+        ))
     combined = max(0, min(combined, 100))
 
     level, color = band(combined)
 
     combined_flags = listing_result["flags"] + comments_result["flags"]
+
+    deep_ctx = {
+        "platform": listing_in.get("platform", ""),
+        "combined_risk_score": combined,
+        "combined_risk_level": level,
+        "listing_score": listing_result["risk_score"],
+        "listing_risk_level": listing_result["risk_level"],
+        "confidence": listing_result["confidence"]["level"],
+        "score_breakdown": listing_result["score_breakdown"],
+        "listing_flags": listing_result["flags"],
+        "positive_signals": [s["message"] for s in listing_result.get("positive_signals", [])],
+        "seller_age": listing_in.get("shop_age"),
+        "seller_rating": listing_in.get("seller_rating"),
+        "listing_rating_count": listing_in.get("rating_count"),
+        "listing_sold_count": listing_in.get("sold_count"),
+        "price": listing_in.get("price"),
+        "image_count": listing_in.get("image_count"),
+        "description_snippet": _raw_desc[:280] if _raw_desc else None,
+        "description_patterns": _desc_patterns if _desc_patterns else None,
+        "comments": {
+            "analyzed": comments_result["comments_analyzed"],
+            "bot_likelihood_pct": comments_result["bot_likelihood_pct"],
+            "fake_review_pct": comments_result["fake_review_pct"],
+            "dominant_sentiment": comments_result["dominant_sentiment"],
+            "review_diversity_score": comments_result.get("review_diversity_score"),
+            "flags": comments_result["flags"],
+        },
+    }
+    groq_deep_msg = generate_deep_summary(deep_ctx)
+    if groq_deep_msg:
+        listing_result["risk_message"] = groq_deep_msg
+        listing_result["risk_message_source"] = "groq"
 
     response = {
         "listing": listing_result,
@@ -105,6 +160,30 @@ async def analyze_deep(
             "confidence_level": listing_result["confidence"]["level"],
             "confidence_pct": listing_result["confidence"]["percentage"],
             "scan_mode": "deep",
+            "notes": groq_deep_msg or contextual_risk_message(level, combined_flags),
+            "raw_data": {
+                "flag_details": listing_result.get("flag_details"),
+                "positive_signals": listing_result.get("positive_signals"),
+                "recommendations": response.get("combined_recommendations"),
+                "verify_checklist": response.get("combined_verify_checklist"),
+                "comments_summary": {
+                    "analyzed": comments_result["comments_analyzed"],
+                    "no_comments_available": comments_result.get("no_comments_available", False),
+                    "bot_likelihood_pct": comments_result["bot_likelihood_pct"],
+                    "bot_likelihood_note": (
+                        "Detects patterns associated with automated or coordinated activity — "
+                        "such as duplicate comment text, time-clustered posts, generic phrases, "
+                        "and bot-style usernames."
+                    ),
+                    "fake_review_pct": comments_result["fake_review_pct"],
+                    "fake_review_note": (
+                        "Combines an ML classifier trained on review patterns with rule-based "
+                        "signals to flag comments that may not reflect genuine buyer experience."
+                    ),
+                    "dominant_sentiment": comments_result["dominant_sentiment"],
+                },
+                "risk_message_source": listing_result.get("risk_message_source"),
+            },
         },
     )
     background.add_task(

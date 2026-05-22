@@ -21,6 +21,9 @@ def save_scan(user_id: str, payload: Dict[str, Any]) -> None:
         "confidence_level": payload.get("confidence_level"),
         "confidence_pct": payload.get("confidence_pct"),
         "scan_mode": payload.get("scan_mode"),
+        # Rich insight data — requires migration 0003
+        "notes": payload.get("notes"),
+        "raw_data": payload.get("raw_data"),
     }
     try:
         supabase.table("scan_history").insert(row).execute()

@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.auth import require_admin
 from app.db.queries import (
@@ -32,8 +32,19 @@ _jobs_lock = threading.Lock()
 
 class TrainingSampleIn(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000)
-    is_fake: bool
+    # Accept either label:"suspicious"/"credible" (new format) OR
+    # is_fake:bool (legacy format from older clients/extension).
+    label: Optional[str] = Field(None, pattern="^(suspicious|credible)$")
+    is_fake: Optional[bool] = None
     notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def resolve_label(self) -> "TrainingSampleIn":
+        if self.label is None:
+            if self.is_fake is None:
+                raise ValueError("Either 'label' or 'is_fake' must be provided")
+            self.label = "suspicious" if self.is_fake else "credible"
+        return self
 
 
 class TrainingSampleBulkIn(BaseModel):
@@ -46,10 +57,12 @@ async def submit_training_sample(
     admin=Depends(require_admin),
     _rl=Depends(rate_limit_admin),
 ):
+    log.info("training-data POST reached: text_len=%d label=%r notes=%r admin_id=%s",
+             len(payload.text), payload.label, payload.notes, admin.get("id"))
     supabase = get_supabase()
     row = {
         "text": payload.text.strip(),
-        "is_fake": payload.is_fake,
+        "label": payload.label,
         "notes": payload.notes,
         "submitted_by": admin["id"],
     }
@@ -57,11 +70,11 @@ async def submit_training_sample(
         res = supabase.table("training_data").insert(row).execute()
         inserted = (res.data or [None])[0]
     except Exception as e:
-        log.error("training-data insert failed: %s", e.__class__.__name__)
+        log.error("training-data insert failed: %s %s", e.__class__.__name__, e)
         raise HTTPException(status_code=500, detail=f"Insert failed: {e}")
     write_admin_log(admin["id"], "training_data_insert", {
         "sample_id": (inserted or {}).get("id"),
-        "is_fake": payload.is_fake,
+        "label": payload.label,
     })
     return {"data": inserted}
 
@@ -79,7 +92,7 @@ async def submit_training_samples_bulk(
     rows = [
         {
             "text": s.text.strip(),
-            "is_fake": s.is_fake,
+            "label": s.label,
             "notes": s.notes,
             "submitted_by": admin["id"],
         }
@@ -100,7 +113,7 @@ async def submit_training_samples_bulk(
 async def list_training_data(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    is_fake: Optional[bool] = Query(None),
+    label: Optional[str] = Query(None),
     include_deleted: bool = Query(False),
     admin=Depends(require_admin),
 ):
@@ -112,8 +125,8 @@ async def list_training_data(
             .order("created_at", desc=True)
             .range(offset, offset + limit - 1)
         )
-        if is_fake is not None:
-            q = q.eq("is_fake", is_fake)
+        if label is not None:
+            q = q.eq("label", label)
         if not include_deleted:
             q = q.is_("deleted_at", "null")
         res = q.execute()
@@ -130,14 +143,14 @@ async def training_stats(admin=Depends(require_admin)):
         fake_res = (
             supabase.table("training_data")
             .select("id", count="exact")
-            .eq("is_fake", True)
+            .eq("label", "suspicious")
             .is_("deleted_at", "null")
             .execute()
         )
         real_res = (
             supabase.table("training_data")
             .select("id", count="exact")
-            .eq("is_fake", False)
+            .eq("label", "credible")
             .is_("deleted_at", "null")
             .execute()
         )
@@ -179,7 +192,7 @@ def _train_pipeline_sync(rows: List[dict]) -> dict:
     import joblib
 
     texts = [r["text"] for r in rows]
-    labels = [1 if r["is_fake"] else 0 for r in rows]
+    labels = [1 if r["label"] == "suspicious" else 0 for r in rows]
 
     pipeline = Pipeline([
         ("tfidf", TfidfVectorizer(
@@ -231,7 +244,7 @@ def _run_training_job(job_id: str, rows: List[dict], admin_id: str) -> None:
     try:
         metrics = _train_pipeline_sync(rows)
 
-        fake_count = sum(1 for r in rows if r["is_fake"])
+        fake_count = sum(1 for r in rows if r["label"] == "suspicious")
         real_count = len(rows) - fake_count
 
         version_row = insert_model_version({
@@ -302,7 +315,7 @@ async def train_model(
         try:
             res = (
                 supabase.table("training_data")
-                .select("text, is_fake")
+                .select("text, label")
                 .is_("deleted_at", "null")
                 .range(page * page_size, (page + 1) * page_size - 1)
                 .execute()
@@ -324,7 +337,7 @@ async def train_model(
             detail=f"Need at least 20 samples to train, have {len(rows)}",
         )
 
-    fake_count = sum(1 for r in rows if r["is_fake"])
+    fake_count = sum(1 for r in rows if r["label"] == "suspicious")
     real_count = len(rows) - fake_count
     if fake_count == 0 or real_count == 0:
         raise HTTPException(
