@@ -165,6 +165,14 @@ def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
         score += 5
         flags.append("Seller response time is slow")
 
+    # Seller name anomaly — random digits or throwaway pattern
+    _sname = listing.get("seller_name") or ""
+    if _sname and len(_sname) >= 3:
+        _digit_ratio = sum(c.isdigit() for c in _sname) / len(_sname)
+        if _digit_ratio > 0.5 or re.match(r'^[a-zA-Z]+_?\d{4,}$', _sname):
+            score += 5
+            flags.append("Seller name appears auto-generated or throwaway")
+
     score = max(0, min(score, 25))
     return score, flags
 
@@ -403,6 +411,42 @@ def score_text(listing: Dict[str, Any], nlp_hits: Dict[str, object] | None = Non
     specs = listing.get("specifications")
     # Specs absence is surfaced as a product notice (score_calculator.py),
     # not as a scored flag — removes noise for listings that simply hide specs.
+
+    # Contact number or payment account in description — strong off-platform solicitation signal
+    _CONTACT_PATTERNS = [
+        r'\b09\d{9}\b',
+        r'\b\+639\d{9}\b',
+        r'\bgcash\s*#?\s*:?\s*09\d{9}\b',
+        r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b',
+    ]
+    if desc:
+        for _cp in _CONTACT_PATTERNS:
+            if re.search(_cp, desc, re.IGNORECASE):
+                score += 12
+                flags.append("Contact number or payment account found in description — seller may be soliciting off-platform payment")
+                break
+
+    # Brand name vs. price mismatch — premium brand mentioned but price far below typical retail
+    _BRAND_FLOOR = {
+        "iphone": 15000, "samsung galaxy": 5000, "dyson": 8000,
+        "airpods": 3000, "macbook": 30000, "ipad": 15000,
+        "ps5": 20000, "xbox": 15000, "nike": 1500, "adidas": 1200,
+        "louis vuitton": 5000, "gucci": 5000, "rolex": 50000,
+    }
+    _price = listing.get("price")
+    _desc_lower = desc.lower() if desc else ""
+    if isinstance(_price, (int, float)) and _price > 0 and _desc_lower:
+        for _brand, _floor in _BRAND_FLOOR.items():
+            if _brand in _desc_lower and _price < _floor * 0.4:
+                score += 15
+                flags.append(f"Brand name '{_brand}' detected but price is far below typical retail value")
+                break
+
+    # High-value item with very short description
+    if isinstance(_price, (int, float)) and _price > 5000 and desc:
+        if len(desc.split()) < 15:
+            score += 8
+            flags.append("High-value item listed with very little description")
 
     # Soft bait language — words like "sale", "legit", "below SRP" are weak on
     # their own but amplify concern when 2+ appear alongside another fired flag.
