@@ -145,7 +145,6 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
         "listing_sold_count": listing.get("sold_count"),
         "price": listing.get("price"),
         "image_count": listing.get("image_count"),
-        "description_snippet": _raw_desc[:280] if _raw_desc else None,
         "description_patterns": _desc_patterns if _desc_patterns else None,
         "listing_rating": listing.get("rating"),
         "response_rate": listing.get("response_rate"),

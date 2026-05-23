@@ -209,8 +209,16 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
         rating_count = listing.get("rating_count")
         no_rating = (rating is None or rating == 0.0) and (rating_count is None or rating_count == 0)
         if no_rating:
-            score += 14
-            flags.append("Product has no ratings yet")
+            _sold_peek = _parse_sold_count(listing.get("sold_count"))
+            if _sold_peek and _sold_peek > 0:
+                # Has sales but zero ratings — more suspicious than no activity at all.
+                # Buyers who purchase almost always leave ratings; absence suggests
+                # reset, suppression, or an inflated sold count.
+                score += 22
+                flags.append("Has recorded sales but no buyer ratings — unusual pattern")
+            else:
+                score += 14
+                flags.append("Product has no ratings yet")
         elif rating == 5.0 and isinstance(rating_count, int) and rating_count < 10:
             score += 15
             flags.append("Perfect rating with very few reviews")
