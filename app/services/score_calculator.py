@@ -267,6 +267,7 @@ def build_positive_signals(listing: Dict) -> List[Dict]:
     result: List[Dict] = []
     platform = (listing.get("platform") or "").lower()
 
+    # --- Platform verification badges ---
     if platform == "shopee" and listing.get("is_shopee_mall"):
         result.append({
             "message": (
@@ -302,6 +303,123 @@ def build_positive_signals(listing: Dict) -> List[Dict]:
                 "consistent performance on this platform."
             ),
             "impact": "Seller credibility indicator",
+        })
+
+    # --- Seller profile data present ---
+    if listing.get("seller_name"):
+        result.append({
+            "message": "Seller name is available and was retrieved successfully.",
+            "impact": "Seller identity verifiable",
+        })
+
+    shop_age_days = None
+    _sa = listing.get("shop_age")
+    if _sa:
+        # Rough parse — mirrors rule_engine._parse_shop_age_days logic
+        import re as _re
+        _s = str(_sa).lower()
+        _days = 0
+        m_y = _re.search(r"(\d+)\s*year", _s)
+        m_mo = _re.search(r"(\d+)\s*month", _s)
+        m_d = _re.search(r"(\d+)\s*day", _s)
+        if m_y:  _days += int(m_y.group(1)) * 365
+        if m_mo: _days += int(m_mo.group(1)) * 30
+        if m_d:  _days += int(m_d.group(1))
+        if _days > 0:
+            shop_age_days = _days
+
+    if shop_age_days is not None and shop_age_days >= 180:
+        years = shop_age_days // 365
+        months = (shop_age_days % 365) // 30
+        if years >= 1:
+            age_label = f"{years} year{'s' if years > 1 else ''}"
+        else:
+            age_label = f"{months} month{'s' if months > 1 else ''}"
+        result.append({
+            "message": f"Seller account has been active for {age_label}, indicating an established presence.",
+            "impact": "Seller longevity confirmed",
+        })
+
+    if platform == "shopee":
+        rr = listing.get("response_rate")
+        if rr is not None:
+            try:
+                rr_val = float(str(rr).rstrip("%"))
+                if rr_val >= 80:
+                    result.append({
+                        "message": f"Seller has a {int(rr_val)}% response rate, indicating reliable buyer communication.",
+                        "impact": "Seller responsiveness confirmed",
+                    })
+            except (ValueError, TypeError):
+                pass
+
+    if platform == "lazada":
+        sr = listing.get("seller_rating")
+        if sr is not None:
+            try:
+                sr_val = float(str(sr).rstrip("%"))
+                if sr_val >= 90:
+                    result.append({
+                        "message": f"Seller has a {int(sr_val)}% seller rating on Lazada, reflecting strong buyer satisfaction.",
+                        "impact": "High seller rating",
+                    })
+            except (ValueError, TypeError):
+                pass
+
+    # --- Listing data completeness ---
+    rating = listing.get("rating")
+    rating_count = listing.get("rating_count")
+    try:
+        rc_int = int(rating_count) if rating_count is not None else 0
+    except (ValueError, TypeError):
+        rc_int = 0
+
+    if rating and isinstance(rating, (int, float)) and rating > 0 and rc_int > 0:
+        if rc_int >= 100:
+            result.append({
+                "message": f"Product has {rc_int:,} buyer ratings with an average of {rating:.1f} stars — strong buyer history.",
+                "impact": "Verified purchase history",
+            })
+        elif rc_int >= 10:
+            result.append({
+                "message": f"Product has {rc_int} buyer ratings with an average of {rating:.1f} stars.",
+                "impact": "Buyer ratings present",
+            })
+
+    sold_raw = listing.get("sold_count")
+    if sold_raw is not None:
+        try:
+            _s_str = str(sold_raw).lower().replace("+", "").replace(",", "")
+            if _s_str.endswith("k"):
+                sold_int = int(float(_s_str[:-1]) * 1000)
+            else:
+                sold_int = int(float(_s_str))
+            if sold_int >= 100:
+                result.append({
+                    "message": f"Listing shows {sold_raw}+ recorded sales, confirming active buyer transactions.",
+                    "impact": "Sales history present",
+                })
+        except (ValueError, TypeError):
+            pass
+
+    desc = (listing.get("description") or "").strip()
+    if len(desc) >= 80 and not desc.startswith("No "):
+        result.append({
+            "message": "Product description is present and provides details about the item.",
+            "impact": "Listing transparency",
+        })
+
+    image_count = listing.get("image_count") or 0
+    if image_count >= 3:
+        result.append({
+            "message": f"{image_count} product image{'s' if image_count != 1 else ''} detected — visual evidence of the item is available.",
+            "impact": "Listing has product photos",
+        })
+
+    if platform in ("shopee", "lazada") and listing.get("specifications"):
+        result.append({
+            "message": "Product specifications section is present, providing verifiable item details.",
+            "impact": "Specifications available",
         })
 
     return result

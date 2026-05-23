@@ -111,25 +111,28 @@ def bot_likelihood(comments: List[Dict[str, Any]]) -> Tuple[float, List[str], Di
             flags.append("High duplicate-text ratio across comments")
 
     # Time clustering — 60-min window holds majority
+    # Raised threshold from 50% → 65% to reduce false positives from same-day
+    # delivery batches which are common for flash sales.
     dts = [_parse_dt(c.get("date")) for c in comments]
     dts_valid = [d for d in dts if d is not None]
     if len(dts_valid) >= 4:
         dts_valid.sort()
         for i in range(len(dts_valid)):
             window = [d for d in dts_valid if 0 <= (d - dts_valid[i]).total_seconds() <= 3600]
-            if len(window) / len(dts_valid) > 0.5:
-                score += 0.4
+            if len(window) / len(dts_valid) > 0.65:
+                score += 0.35
                 stats["clustered_dates"] = True
                 flags.append("Multiple comments posted within a 60-minute window")
                 break
 
-    # 7-day burst — >60% of dated reviews within any 7-day window
+    # 7-day burst — >75% of dated reviews within any 7-day window
+    # Raised from 60% → 75% to avoid false-positive on normal delivery batches.
     if len(dts_valid) >= 5:
         burst_found = False
         for i in range(len(dts_valid)):
             window_7d = [d for d in dts_valid if 0 <= (d - dts_valid[i]).days <= 7]
-            if len(window_7d) / len(dts_valid) > 0.6:
-                score += 0.5
+            if len(window_7d) / len(dts_valid) > 0.75:
+                score += 0.35
                 flags.append("Majority of reviews posted within a 7-day burst")
                 burst_found = True
                 break
@@ -137,18 +140,20 @@ def bot_likelihood(comments: List[Dict[str, Any]]) -> Tuple[float, List[str], Di
         if not burst_found and dts_valid:
             pass  # handled below
 
-    # Average length — Filipino reviews are often short (10–25 chars); raise threshold
+    # Average length — Filipino reviews are typically very short ("legit", "ok", "nice");
+    # only flag genuinely minimal reviews (< 12 chars) to avoid false positives.
     avg_len = sum(len(t) for t in texts) / n
     stats["avg_length"] = round(avg_len, 1)
-    if avg_len < 25:
-        score += 0.4
+    if avg_len < 12:
+        score += 0.3
         flags.append("Average comment length is very short")
 
-    # Generic phrases — lowered threshold to catch typical PH review patterns
+    # Generic phrases — PH reviews commonly use short positive phrases like
+    # "legit", "sulit", "ok"; only flag when they overwhelmingly dominate.
     generic_hits = sum(1 for t in texts if any(p in t for p in GENERIC_PHRASES))
     stats["generic_count"] = generic_hits
-    if n and generic_hits / n > 0.35:
-        score += 0.3
+    if n and generic_hits / n > 0.60:
+        score += 0.25
         flags.append("Generic phrases dominate comments")
 
     # Date clustering — same day > 75%
@@ -179,12 +184,14 @@ def bot_likelihood(comments: List[Dict[str, Any]]) -> Tuple[float, List[str], Di
         score += 0.35
         flags.append("Usernames follow sequential numbering patterns")
 
-    # Rating diversity — zero reviews below 4 stars among rated comments
+    # Rating diversity — zero reviews below 4 stars among rated comments.
+    # Require at least 10 rated reviews to avoid over-penalizing listings
+    # that simply haven't received any negative feedback yet.
     rated_all = [c for c in comments if c.get("rating_stars") is not None]
-    if len(rated_all) >= 5:
+    if len(rated_all) >= 10:
         below_4 = sum(1 for c in rated_all if c["rating_stars"] < 4)
         if below_4 == 0:
-            score += 0.25
+            score += 0.2
             flags.append("All collected reviews are 4–5 star — no critical ratings found")
 
         # High 1-star ratio among collected comments
@@ -219,6 +226,11 @@ def bot_likelihood(comments: List[Dict[str, Any]]) -> Tuple[float, List[str], Di
         if top_bucket_ratio > 0.70:
             score += 0.2
             flags.append("Review lengths are suspiciously uniform")
+
+    # Small-sample dampening — with fewer than 8 reviews the signals are not
+    # reliable enough to justify a high bot score. Scale down proportionally.
+    if n < 8:
+        score *= max(0.4, n / 8)
 
     return min(score, 1.0), flags, stats
 
@@ -258,19 +270,20 @@ def _fake_review_rules(comments: List[Dict[str, Any]], flags: List[str]) -> floa
         return 0.0
 
     # Only count reviews that actually have a star rating (null means not captured)
+    # Require at least 8 rated reviews before flagging all-5-star uniformity.
     rated = [c for c in comments if c.get("rating_stars") is not None]
     n_rated = len(rated)
     five_star = sum(1 for c in rated if c.get("rating_stars") == 5)
-    if n_rated > 0 and five_star / n_rated == 1.0:
-        score += 0.3
+    if n_rated >= 8 and five_star / n_rated == 1.0:
+        score += 0.2
         flags.append("All rated reviews are exactly 5-star (suspiciously uniform)")
 
     texts = [(c.get("text") or "").lower() for c in comments]
     raw_texts = [(c.get("text") or "") for c in comments]
 
     generic_hits = sum(1 for t in texts if any(p in t for p in GENERIC_PHRASES))
-    if generic_hits / n > 0.45:
-        score += 0.3
+    if generic_hits / n > 0.65:
+        score += 0.2
         flags.append("Generic phrases dominate comments")
 
     # Includes Tagalog equivalents: produkto, kulay, sukat, kalidad, delivery
@@ -282,8 +295,8 @@ def _fake_review_rules(comments: List[Dict[str, Any]], flags: List[str]) -> floa
             t,
         )
     )
-    if no_specifics / n > 0.6:
-        score += 0.2
+    if no_specifics / n > 0.75:
+        score += 0.15
         flags.append("Comments lack shipping or product specifics")
 
     # All-caps text — common in fake review farms
@@ -308,18 +321,20 @@ def _fake_review_rules(comments: List[Dict[str, Any]], flags: List[str]) -> floa
             r"(ship|deliver|product|item|color|size|quality|produkto|kalidad)", t
         )
     )
-    if n and short_vague / n > 0.5:
+    if n and short_vague / n > 0.65:
         score += 0.15
         flags.append("Many reviews are very short with no product details")
 
     # Meaningless reviews — no word longer than 4 characters and under 15 chars total.
     # Catches emoji-only, single-letter strings, and placeholder noise.
+    # Raised threshold from 50% → 65% to avoid penalizing PH listings where short
+    # affirmations like "legit", "sulit", "ok" are the norm.
     meaningless = sum(
         1 for t in texts
         if len(t.strip()) < 15 or not re.search(r"\b\w{5,}\b", t)
     )
-    if n and meaningless / n > 0.5:
-        score += 0.2
+    if n and meaningless / n > 0.65:
+        score += 0.15
         flags.append("Majority of reviews contain no meaningful words")
 
     # Rating-text mismatch — 5-star review containing clearly negative language
