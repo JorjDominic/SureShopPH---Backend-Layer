@@ -205,10 +205,14 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
         no_rating = (rating is None or rating == 0.0) and (rating_count is None or rating_count == 0)
         if no_rating:
             _sold_peek = _parse_sold_count(listing.get("sold_count"))
-            if _sold_peek and _sold_peek > 0:
+            if _sold_peek and _sold_peek > 100:
+                # Large sold count but zero ratings — likely an extraction failure
+                # rather than genuine suppression. Flag softly so the score isn't
+                # artificially inflated by bad selector output.
+                score += 6
+                flags.append("Rating data could not be retrieved — listing has recorded sales")
+            elif _sold_peek and _sold_peek > 0:
                 # Has sales but zero ratings — more suspicious than no activity at all.
-                # Buyers who purchase almost always leave ratings; absence suggests
-                # reset, suppression, or an inflated sold count.
                 score += 22
                 flags.append("Has recorded sales but no buyer ratings — unusual pattern")
             else:
@@ -226,12 +230,27 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
                 flags.append("Below-average rating")
 
         sold = _parse_sold_count(listing.get("sold_count"))
+        # Use rating_count as a proxy when sold_count is missing/zero —
+        # if buyers left ratings, sales clearly happened.
+        _rc_raw = listing.get("rating_count")
+        try:
+            _rc = int(_rc_raw) if _rc_raw is not None else 0
+        except (ValueError, TypeError):
+            _rc = 0
         if sold == 0:
-            score += 10
-            flags.append("Zero recorded sales")
+            if _rc > 0:
+                score += 3
+                flags.append("Sold count unavailable — buyer ratings suggest purchases have occurred")
+            else:
+                score += 10
+                flags.append("Zero recorded sales")
         elif sold is None:
-            score += 8
-            flags.append("No items sold on this listing")
+            if _rc > 0:
+                score += 3
+                flags.append("Sold count unavailable — buyer ratings suggest purchases have occurred")
+            else:
+                score += 8
+                flags.append("No items sold on this listing")
 
         # Sold/rating mismatch — many sales but almost no ratings suggests
         # ratings were suppressed, reset, or the listing is a shell.
