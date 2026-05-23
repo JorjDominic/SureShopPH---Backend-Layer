@@ -184,14 +184,6 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
     flags: List[str] = []
     platform = listing.get("platform")
 
-    image_count = listing.get("image_count") or 0
-    if image_count == 0:
-        score += 10
-        flags.append("No product images provided")
-    elif image_count < 3:
-        score += 5
-        flags.append("Very few product images")
-
     price = listing.get("price")
     if price == 0 or price == 0.0:
         # Distinguish "free" — Shopee/Lazada normalize free to 0; FB has price=0 if free
@@ -254,8 +246,9 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
                 pass
 
     if platform == "facebook":
-        # Platform baseline — FB has no buyer protection or seller verification.
-        score += 10
+        # Platform baseline — FB has no buyer protection, no escrow, no verified sellers.
+        # Elevated to reflect the structural lack of safeguards vs. Shopee/Lazada.
+        score += 20
         flags.append("Facebook Marketplace: no platform buyer protection or seller verification")
 
         if listing.get("price_is_variant"):
