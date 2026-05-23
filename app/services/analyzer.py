@@ -1,5 +1,6 @@
 """Shared analyzer used by listing.py and deep.py."""
 from __future__ import annotations
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -28,6 +29,55 @@ def _category_trust(field_confidences: Dict[str, str], fields: list[str]) -> flo
     if not seen:
         return 1.0
     return sum(CONFIDENCE_TRUST.get(c, 1.0) for c in seen) / len(seen)
+
+
+_PARTS_OUT_RE = re.compile(
+    r"\bparts?\s+out\b|\bpart-out\b|\bparting\s+out\b"
+    r"|\bpor\s+parte\b"
+    r"|\bselling\s+(?:by\s+)?(?:piece|parts?|separately|individually)\b",
+    re.IGNORECASE,
+)
+_PM_PRICE_RE = re.compile(
+    r"\bpm\s+for\s+(?:actual\s+)?price\b"
+    r"|\b(?:message|msg|dm|chat|inbox)\s+(?:me\s+)?for\s+(?:actual\s+)?price\b"
+    r"|\bprice\s*[:=]\s*(?:pm|dm|tbd)\b"
+    r"|\bprice\s+on\s+(?:pm|dm|chat|request)\b",
+    re.IGNORECASE,
+)
+
+
+def _derive_listing_type(listing: Dict[str, Any]) -> str:
+    """Classify listing type from title and description patterns."""
+    desc = (listing.get("description") or "").lower()
+    title = (listing.get("title") or listing.get("product_name") or "").lower()
+    combined = f"{title} {desc}"
+    if _PARTS_OUT_RE.search(combined):
+        return "parts_out"
+    if _PM_PRICE_RE.search(combined):
+        return "price_hidden"
+    if re.search(r"\binstallment\b|\bmonthly\s+payment\b|\bdp\s+(?:only|muna)\b|\bdownpayment\b", combined, re.I):
+        return "installment"
+    if re.search(r"\bbundle\b", combined, re.I):
+        return "bundle"
+    return "single_item"
+
+
+def _derive_condition(description: str) -> str | None:
+    """Infer item condition from description text when not explicitly provided."""
+    if not description:
+        return None
+    d = description.lower()
+    if re.search(r"\bbrand\s*new\b|\bnew\s+sealed\b|\bnew\s+in\s+box\b|\bbnib\b", d):
+        return "Brand New"
+    if re.search(r"\bused\s*like\s*new\b|\bopen\s+box\b|\bulu\b", d):
+        return "Used - Like New"
+    if re.search(r"\bpre[-\s]?(?:owned|loved)\b|\bpreloved\b|\bsecond[-\s]?hand\b|\b2nd\s+hand\b", d):
+        return "Pre-owned"
+    if re.search(r"\bfor\s+parts?\b|\bnot\s+working\b|\bdefective\b|\bsalvage\b", d):
+        return "For Parts"
+    if re.search(r"\bused\b", d):
+        return "Used"
+    return None
 
 
 def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
@@ -81,6 +131,13 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
         field_confidences=field_conf,
     )
 
+    # Low-confidence data penalty: when key fields are missing the scoring rules
+    # fire on incomplete data, which may underestimate actual risk.
+    if confidence["level"] == "Low" and len(confidence.get("could_not_retrieve", [])) >= 3:
+        total = min(total + 10, 100)
+        flags.append("Limited extracted data — risk assessment may not capture all available signals")
+        level, color = band(total)
+
     notice = build_product_notice(listing, breakdown)
     signals = platform_signals(listing)
     positive = build_positive_signals(listing)
@@ -113,6 +170,10 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
     recs_total = len(build_recommendations(flags, limit=999))
     checklist = build_verify_checklist(flags, level)
     checklist_total = len(build_verify_checklist(flags, level, limit=999))
+
+    listing_type = _derive_listing_type(listing)
+    derived_condition = _derive_condition(listing.get("description") or "") if not listing.get("condition") else None
+    account_age_label = "Profile Age" if platform == "facebook" else "Shop Age"
 
     # Build description pattern summary for Groq — only include matched phrases
     _desc_patterns: Dict[str, Any] = {}
@@ -148,6 +209,8 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
         "description_patterns": _desc_patterns if _desc_patterns else None,
         "listing_rating": listing.get("rating"),
         "response_rate": listing.get("response_rate"),
+        "listing_type": listing_type,
+        "condition": listing.get("condition") or derived_condition,
     }
     groq_risk_message = generate_listing_summary(groq_listing_ctx)
 
@@ -172,5 +235,8 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
         "platform_signals": signals,
         "scan_completeness": completeness,
         "scan_mode_note": scan_mode_note,
+        "listing_type": listing_type,
+        "derived_condition": derived_condition,
+        "account_age_label": account_age_label,
         "scan_timestamp": datetime.now(timezone.utc).isoformat(),
     }

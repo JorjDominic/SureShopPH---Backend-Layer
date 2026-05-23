@@ -126,6 +126,9 @@ def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             elif sr < 85:
                 score += 8
                 flags.append("Below-average seller rating")
+        else:
+            score += 6
+            flags.append("Seller rating could not be retrieved")
 
     # Positive signals — reduce
     if platform == "shopee" and listing.get("is_shopee_mall"):
@@ -192,7 +195,7 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             score += 8
             flags.append("Price reported as 0 without 'free' indication")
 
-    if isinstance(price, (int, float)) and price is not None and 0 < price < DEFAULT_PRICE_BASELINE:
+    if platform in ("shopee", "lazada") and isinstance(price, (int, float)) and price is not None and 0 < price < 50:
         score += 10
         flags.append("Price unusually low compared to typical market")
 
@@ -266,6 +269,20 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             score += 8
             flags.append("Description appears auto-generated only")
 
+        # PM-for-price / hidden actual price — seller explicitly routes price to DMs.
+        _PM_PRICE_RE = re.compile(
+            r"\bpm\s+for\s+(?:actual\s+)?price\b"
+            r"|\b(?:message|msg|dm|chat|inbox)\s+(?:me\s+)?for\s+(?:actual\s+)?price\b"
+            r"|\bprice\s*[:=]\s*(?:pm|dm|tbd)\b"
+            r"|\bprice\s+on\s+(?:pm|dm|chat|request)\b",
+            re.IGNORECASE,
+        )
+        if desc and _PM_PRICE_RE.search(desc):
+            score += 8
+            flags.append(
+                "Price Transparency Risk: listing instructs buyer to message for actual price — listed price may not reflect true cost"
+            )
+
         # Price transparency — placeholder / bait prices common on FB Marketplace.
         # Uses obvious anomaly detection only; avoids strong fraud claims.
         if price is not None and isinstance(price, (int, float)) and price > 0:
@@ -274,10 +291,10 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             except (ValueError, TypeError):
                 _p = ""
             if _p:
-                if len(_p) == 1:
+                if int(_p) <= 10:
                     score += 6
                     flags.append(
-                        "Price Transparency Risk: single-digit price may be a placeholder — confirm actual price with seller"
+                        "Price Transparency Risk: price appears too low to be real and may be a placeholder — confirm actual price with seller"
                     )
                 elif re.match(r'^(\d)\1+$', _p):
                     score += 8
@@ -288,6 +305,11 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
                     score += 8
                     flags.append(
                         "Price Transparency Risk: sequential-digit price may indicate a placeholder — confirm actual price with seller"
+                    )
+                elif price >= 1_000_000:
+                    score += 8
+                    flags.append(
+                        "Price Transparency Risk: listed price is unusually high for a marketplace listing — confirm actual price with seller"
                     )
 
     score = max(0, min(score, 25))
@@ -433,6 +455,11 @@ def score_text(listing: Dict[str, Any], nlp_hits: Dict[str, object] | None = Non
         "airpods": 3000, "macbook": 30000, "ipad": 15000,
         "ps5": 20000, "xbox": 15000, "nike": 1500, "adidas": 1200,
         "louis vuitton": 5000, "gucci": 5000, "rolex": 50000,
+        # PC hardware
+        "ryzen": 5000, "intel core": 7000,
+        "rtx 3": 15000, "rtx 4": 25000,
+        "gtx 10": 5000, "gtx 16": 8000,
+        "rx 6": 10000, "rx 7": 15000,
     }
     _price = listing.get("price")
     _desc_lower = desc.lower() if desc else ""
@@ -448,6 +475,18 @@ def score_text(listing: Dict[str, Any], nlp_hits: Dict[str, object] | None = Non
         if len(desc.split()) < 15:
             score += 8
             flags.append("High-value item listed with very little description")
+
+    # Parts-out / multi-item listing — price may only cover one component
+    _PARTS_OUT_RE = re.compile(
+        r"\bparts?\s+out\b|\bpart-out\b|\bparting\s+out\b"
+        r"|\bpor\s+parte\b"
+        r"|\bselling\s+(?:by\s+)?(?:piece|parts?|separately|individually)\b",
+        re.IGNORECASE,
+    )
+    _title_text = listing.get("title") or listing.get("product_name") or ""
+    if _PARTS_OUT_RE.search(desc) or _PARTS_OUT_RE.search(_title_text):
+        score += 5
+        flags.append("Parts-out or multi-item listing detected — verify which items are included at this price")
 
     # Soft bait language — words like "sale", "legit", "below SRP" are weak on
     # their own but amplify concern when 2+ appear alongside another fired flag.

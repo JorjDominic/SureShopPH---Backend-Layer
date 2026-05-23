@@ -194,9 +194,7 @@ def _build_listing_prompt(context: Dict[str, Any]) -> list:
         "Skip entirely if nothing positive is present.\n"
         "Sentence 4: If recommendations is not empty, synthesize those items into one or two natural sentences "
         "as direct advice to the buyer — rephrase them, do not copy word-for-word. "
-        "Always also suggest asking the seller for additional product photos to check quality and condition. "
-        "For Facebook Marketplace listings, also mention: reviewing the seller's profile and account history, "
-        "using COD or meeting in person for payment, and checking the item before handing over money.\n\n"
+        "Always also suggest asking the seller for additional product photos to check quality and condition.\n\n"
         "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
         "Plain sentences only. Factual, neutral tone. Under 600 characters."
     )
@@ -233,9 +231,72 @@ def _build_deep_prompt(context: Dict[str, Any]) -> list:
         "response_rate > 80. Skip positive mention if nothing supports it.\n"
         "Sentence 4: If recommendations is not empty, synthesize those items into one or two natural sentences "
         "as direct advice to the buyer — rephrase them, do not copy word-for-word. "
-        "Always also suggest asking the seller for additional product photos to verify quality and condition. "
-        "For Facebook Marketplace, also mention: reviewing the seller's profile history, "
-        "using COD or in-person payment, and checking the item before handing over money.\n\n"
+        "Always also suggest asking the seller for additional product photos to verify quality and condition.\n\n"
+        "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
+        "Plain sentences only. Factual, neutral tone. Under 700 characters."
+    )
+    user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def _build_facebook_listing_prompt(context: Dict[str, Any]) -> list:
+    system = (
+        "You are helping a Filipino buyer assess a Facebook Marketplace listing scan result. "
+        "Facebook Marketplace is an informal peer-to-peer platform: there is no buyer protection, "
+        "no verified sellers, no escrow, and no platform dispute resolution. "
+        "The listed price is often NOT the real price \u2014 placeholder prices (\u20b11, \u20b110, \u20b1999,999) and "
+        "'PM for price' posts are common. Ratings and sold counts do not exist on this platform.\n\n"
+        "Write 3-4 short, direct sentences in plain English.\n\n"
+        "CRITICAL RULES:\n"
+        "- Do NOT open with 'The risk level is...' or 'The risk score indicates...'.\n"
+        "- Never call a listing reassuring then list concerns in the next sentence \u2014 contradiction.\n"
+        "- Lead with the most significant flag. If no flags, lead with what is actually known about the listing.\n"
+        "- seller_account_age is how long the Facebook profile has existed \u2014 NOT how long the listing was posted.\n"
+        "- Do NOT mention seller ratings, sold count, or review scores \u2014 Facebook does not have these features.\n"
+        "- Do NOT infer from raw description text. Only reference description_patterns if keys are present.\n"
+        "- If listing_type is 'parts_out', note that the price may apply to individual components only.\n"
+        "- If listing_type is 'price_hidden' or a flag starts with 'Price Transparency Risk: listing instructs', "
+        "treat this as a major concern and lead with it.\n\n"
+        "Sentence 1: Describe the most significant finding. Weave in risk level naturally "
+        "(e.g. 'This Facebook Marketplace listing scores medium risk, primarily because...' or "
+        "'This listing shows relatively few specific flags, though keep in mind...').\n"
+        "Sentence 2: Describe additional flags if present \u2014 placeholder price, PM-for-price, brand-price mismatch, "
+        "contact info in description, parts-out. Skip if no additional flags beyond Sentence 1.\n"
+        "Sentence 3: Note any positive signals or verified details if present. "
+        "If confidence is Low, mention that limited information was available for this scan. "
+        "Skip if nothing meaningful to report.\n"
+        "Sentence 4: Give direct buyer safety advice: always confirm the exact price and what is included "
+        "before agreeing, meet in a public place, inspect the item before paying, "
+        "prefer cash-on-delivery over advance GCash transfers, and review the seller's profile and account history. "
+        "If recommendations is not empty, weave in one or two items naturally.\n\n"
+        "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
+        "Plain sentences only. Factual, neutral tone. Under 600 characters."
+    )
+    user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def _build_facebook_deep_prompt(context: Dict[str, Any]) -> list:
+    system = (
+        "You are helping a Filipino buyer understand a deep scan result for a Facebook Marketplace listing. "
+        "Important: Facebook Marketplace has no product-level reviews \u2014 any review data in this scan is likely absent or minimal. "
+        "Facebook is an informal peer-to-peer platform: no buyer protection, no verified sellers, placeholder prices are common.\n\n"
+        "Write 3-4 short, direct sentences in plain English.\n\n"
+        "CRITICAL RULES:\n"
+        "- Do NOT open with 'The overall risk is...' or 'The combined risk level indicates...'.\n"
+        "- Never call a listing reassuring then list concerns \u2014 contradiction.\n"
+        "- Lead with the most significant finding.\n"
+        "- seller_account_age is the Facebook profile age \u2014 NOT how long the listing was posted.\n"
+        "- Do NOT mention seller ratings or sold count \u2014 Facebook does not have these.\n"
+        "- If review data shows 0 analyzed or is missing, clearly state that FB does not provide product-level reviews.\n"
+        "- If listing_type is 'price_hidden' or a flag starts with 'Price Transparency Risk', treat as a major concern.\n\n"
+        "Sentence 1: Describe the most significant finding from the combined scan. Weave in the risk level naturally.\n"
+        "Sentence 2: Describe additional listing flags factually if any exist beyond Sentence 1. Skip if none.\n"
+        "Sentence 3: Address review data plainly \u2014 if none, note FB has no review functionality. "
+        "Mention profile age or any positive signals if present.\n"
+        "Sentence 4: Give practical safety advice: confirm exact price and inclusions before agreeing, "
+        "meet in a public place, inspect before paying, avoid advance GCash, check the seller's profile history. "
+        "Weave in relevant items from recommendations if not empty.\n\n"
         "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
         "Plain sentences only. Factual, neutral tone. Under 700 characters."
     )
@@ -247,7 +308,9 @@ def generate_listing_summary(context: Dict[str, Any]) -> Optional[str]:
     """Return a Groq-powered listing scan insight, falling back to a rule-built summary."""
     # --- Groq path ---
     if ENABLE_GROQ_LISTING_SUMMARY and GROQ_API_KEY:
-        raw = _call_groq(_build_listing_prompt(context), max_tokens=210)
+        platform = (context.get("platform") or "").lower()
+        prompt_fn = _build_facebook_listing_prompt if platform == "facebook" else _build_listing_prompt
+        raw = _call_groq(prompt_fn(context), max_tokens=210)
         if raw:
             result = _clean_insight(raw, max_sentences=4, max_chars=600)
             if result:
@@ -292,7 +355,9 @@ def generate_deep_summary(context: Dict[str, Any]) -> Optional[str]:
     """Return a Groq-powered deep scan insight, falling back to a rule-built summary."""
     # --- Groq path ---
     if ENABLE_GROQ_LISTING_SUMMARY and GROQ_API_KEY:
-        raw = _call_groq(_build_deep_prompt(context), max_tokens=230)
+        platform = (context.get("platform") or "").lower()
+        prompt_fn = _build_facebook_deep_prompt if platform == "facebook" else _build_deep_prompt
+        raw = _call_groq(prompt_fn(context), max_tokens=230)
         if raw:
             result = _clean_insight(raw, max_sentences=4, max_chars=700)
             if result:
