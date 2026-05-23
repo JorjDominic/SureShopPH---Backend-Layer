@@ -117,6 +117,15 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
         total = min(total + 18, 100)
         flags = ["Unverified listing: no recorded sales or buyer ratings"] + flags
 
+    # Compound: sales exist but zero buyer ratings — more unusual than no activity
+    # at all, since even a small fraction of buyers normally leaves a review.
+    # Consistent with review suppression, inflated/fake sales, or shell listings.
+    # Applied after category caps; slightly lower than the zero-everything penalty
+    # because the presence of sales is itself a partial legitimacy signal.
+    if "Has recorded sales but no buyer ratings — unusual pattern" in flags:
+        total = min(total + 12, 100)
+        flags = ["Suspicious activity pattern: listing has recorded sales but no buyer ratings"] + flags
+
     level, color = band(total)
 
     breakdown = {
