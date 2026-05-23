@@ -82,6 +82,44 @@ def _looks_auto_generated_facebook_description(description: str) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
 
 
+# Matches explicit prices written in descriptions (e.g. "₱2,500", "PHP 1500", "2500 pesos").
+# Used to recover the real price when a FB listing uses a placeholder in the price field.
+_PRICE_IN_DESC_RE = re.compile(
+    r"(?:₱|php)\s*([\d,]+(?:\.\d{1,2})?)"   # ₱2,500 / PHP 1500
+    r"|(\d[\d,]+)\s*(?:pesos?|php)\b"         # 2500 pesos / 2,500 PHP
+    r"|price\s*(?:is\s+|:\s*)(?:₱|php)?\s*([\d,]+(?:\.\d{1,2})?)",  # price: ₱2500
+    re.IGNORECASE,
+)
+
+
+def _extract_price_from_description(desc: str) -> float | None:
+    """Return the first plausible price found in free-form description text, or None."""
+    if not desc:
+        return None
+    for m in _PRICE_IN_DESC_RE.finditer(desc):
+        raw = (m.group(1) or m.group(2) or m.group(3) or "").replace(",", "")
+        try:
+            v = float(raw)
+            if 50 < v < 5_000_000:
+                return v
+        except ValueError:
+            pass
+    return None
+
+
+# Phrases that indicate a description is price-evasive rather than informative.
+# Used by both the scoring penalty and the positive-signal filter.
+_EVASIVE_DESC_RE = re.compile(
+    r"\bpm\s+(?:na\s+lang\s+)?(?:for\s+)?(?:actual\s+)?price\b"
+    r"|\bkayo\s+na\s+(?:mag[- ]?)?(?:bahala|decide|decide)\b"
+    r"|\b(?:message|msg|dm|chat|inbox)\s+(?:me\s+)?(?:na\s+lang\s+)?for\s+(?:actual\s+)?price\b"
+    r"|\bprice\s*[:=]\s*(?:pm|dm|tbd|neg)\b"
+    r"|\bneg(?:otiable)?\s+price\b"  # "neg price" alone is fine but combined with no other info is evasive
+    r"|\bprice\s+on\s+(?:pm|dm|chat|request)\b",
+    re.IGNORECASE,
+)
+
+
 # ---------- Category 1: Seller attributes ----------
 
 def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
@@ -289,24 +327,27 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             flags.append("Description appears auto-generated only")
 
         # PM-for-price / hidden actual price — seller explicitly routes price to DMs.
-        _PM_PRICE_RE = re.compile(
-            r"\bpm\s+for\s+(?:actual\s+)?price\b"
-            r"|\b(?:message|msg|dm|chat|inbox)\s+(?:me\s+)?for\s+(?:actual\s+)?price\b"
-            r"|\bprice\s*[:=]\s*(?:pm|dm|tbd)\b"
-            r"|\bprice\s+on\s+(?:pm|dm|chat|request)\b",
-            re.IGNORECASE,
-        )
-        if desc and _PM_PRICE_RE.search(desc):
+        # Uses the shared _EVASIVE_DESC_RE which also covers Filipino phrasing.
+        if desc and _EVASIVE_DESC_RE.search(desc):
             score += 8
             flags.append(
                 "Price Transparency Risk: listing instructs buyer to message for actual price — listed price may not reflect true cost"
             )
 
         # Price transparency — placeholder / bait prices common on FB Marketplace.
+        # Before checking placeholders, try to recover the real price from the
+        # description text (sellers often write "₱2,500" in the description while
+        # using ₱1 as a placeholder in the price field).
+        _effective_price = price
+        if desc:
+            _desc_price = _extract_price_from_description(desc)
+            if _desc_price:
+                _effective_price = _desc_price
+
         # Uses obvious anomaly detection only; avoids strong fraud claims.
-        if price is not None and isinstance(price, (int, float)) and price > 0:
+        if _effective_price is not None and isinstance(_effective_price, (int, float)) and _effective_price > 0:
             try:
-                _p = str(int(float(price)))
+                _p = str(int(float(_effective_price)))
             except (ValueError, TypeError):
                 _p = ""
             if _p:
@@ -325,7 +366,7 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
                     flags.append(
                         "Price Transparency Risk: sequential-digit price may indicate a placeholder — confirm actual price with seller"
                     )
-                elif price >= 1_000_000:
+                elif _effective_price >= 1_000_000:
                     score += 8
                     flags.append(
                         "Price Transparency Risk: listed price is unusually high for a marketplace listing — confirm actual price with seller"

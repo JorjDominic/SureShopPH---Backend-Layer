@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, List, Tuple
 
 from app.config import RISK_BANDS
+from app.services.rule_engine import _EVASIVE_DESC_RE
 
 
 def band(score: int) -> Tuple[str, str]:
@@ -403,7 +404,14 @@ def build_positive_signals(listing: Dict) -> List[Dict]:
             pass
 
     desc = (listing.get("description") or "").strip()
-    if len(desc) >= 80 and not desc.startswith("No "):
+    # A description qualifies as a positive signal only if it has real content:
+    # it must be long enough to be meaningful, not a fallback message, and not
+    # primarily a price-evasion phrase (e.g. "kayo na bahala mag price / pm nalang").
+    if (
+        len(desc) >= 80
+        and not desc.startswith("No ")
+        and not _EVASIVE_DESC_RE.search(desc)
+    ):
         result.append({
             "message": "Product description is present and provides details about the item.",
             "impact": "Listing transparency",
