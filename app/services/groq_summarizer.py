@@ -168,28 +168,28 @@ def _clean_insight(text: str, max_sentences: int = 4, max_chars: int = 700) -> s
 def _build_listing_prompt(context: Dict[str, Any]) -> list:
     system = (
         "You are helping online shoppers in the Philippines understand a product listing scan result. "
-        "Write 3 short sentences in plain, informational English.\n\n"
-        "Sentence 1: State what the risk level indicates for this listing.\n"
-        "Sentence 2: Describe what each flag means for the buyer factually — what was detected and why it is noted. "
-        "Use the actual data provided:\n"
-        "- If seller_age shows months or years, do not describe the seller as new. "
-        "Only note a new seller if seller_new or seller_under_30d is in the flags list.\n"
-        "- If the listing has no ratings or sales yet, state that no buyer feedback is available for this listing.\n"
-        "- If description_patterns is present, note the specific phrases found neutrally: "
-        "payment_warning_phrase_found is a payment or returns condition stated in the description (quote the phrase); "
-        "over_promise_phrase_found is a product claim in the description (quote the phrase); "
-        "urgency_phrase_found is urgency language detected in the description (quote the phrase).\n"
-        "- If description_patterns is absent or a key is not present, do NOT mention that field at all. "
-        "Never generate statements about policies, terms, or information that are not present in the data provided.\n"
-        "- If any flag contains 'Price Transparency Risk', state that the displayed price may be a placeholder "
-        "and the buyer should confirm the real price with the seller before any payment. "
-        "This instruction applies ONLY when the flag literally starts with 'Price Transparency Risk' — "
-        "do NOT apply placeholder reasoning to 'Price unusually low' or any other price flag.\n"
-        "- If flags include 'Facebook Marketplace: no platform buyer protection', include one brief clause "
-        "noting that this platform has no built-in buyer protection — do not dedicate a full sentence to it alone.\n"
-        "Sentence 3: Give one specific, actionable step based on what was found.\n\n"
+        "Write 3-4 short sentences in plain, informational English that give a BALANCED view — covering both concerns and reassuring points.\n\n"
+        "Sentence 1: State what the risk level indicates and briefly summarize the overall picture (concerning, mixed, or mostly reassuring).\n"
+        "Sentence 2: Describe the key concerns from the flags factually — what was detected and why it matters. "
+        "Use only the actual data provided:\n"
+        "- If seller_age shows months or years, do not call the seller new. "
+        "Only note a new seller if seller_new or seller_under_30d appears in the flags list.\n"
+        "- If the listing has no ratings or sales yet, state that no buyer feedback is available.\n"
+        "- If description_patterns is present, note the specific phrases found neutrally (quote them). "
+        "If description_patterns is absent or a key is missing, do NOT mention that field at all.\n"
+        "- If any flag literally starts with 'Price Transparency Risk', state the displayed price may be a placeholder "
+        "and the buyer should confirm the real price. Do NOT apply this to 'Price unusually low' or any other flag.\n"
+        "- If flags include 'Facebook Marketplace: no platform buyer protection', briefly mention there is no built-in buyer protection.\n"
+        "Sentence 3: Highlight at least one positive aspect when the data supports it — choose from: "
+        "positive_signals entries (e.g. mall status, top seller badge); "
+        "listing_rating >= 4.0 with listing_rating_count > 10 (note the strong rating); "
+        "listing_sold_count > 50 (note the track record of sales); "
+        "response_rate > 80 (note the seller is responsive); "
+        "image_count > 3 (note multiple product images provided). "
+        "If there is truly nothing positive in the data, skip this sentence entirely rather than inventing one.\n"
+        "Sentence 4: Give one specific, actionable step the buyer should take based on the overall picture.\n\n"
         "RULES: Address the buyer directly using you/your. No markdown. No bullet points. No bold text. "
-        "No numbered lists. No headers. Plain sentences only. Neutral tone throughout. Under 500 characters."
+        "No numbered lists. No headers. Plain sentences only. Neutral, factual tone. Under 600 characters."
     )
     user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -198,24 +198,25 @@ def _build_listing_prompt(context: Dict[str, Any]) -> list:
 def _build_deep_prompt(context: Dict[str, Any]) -> list:
     system = (
         "You are helping online shoppers in the Philippines understand a combined listing and review scan result. "
-        "Write 3-4 short sentences in plain, informational English.\n\n"
-        "Sentence 1: State what the overall result indicates.\n"
-        "Sentence 2: Describe what each listing flag means factually — what was detected and why it is noted. "
-        "Use the actual data:\n"
-        "- If seller_age shows months or years, do not describe the seller as new. "
-        "Only note a new seller if seller_new or seller_under_30d is in the flags list.\n"
-        "- If the listing has no ratings or sales yet, state that no buyer feedback is available for this listing.\n"
-        "- If description_patterns is present, note those phrases neutrally: "
-        "payment_warning_phrase_found is a payment or returns condition in the description (quote it); "
-        "over_promise_phrase_found is a product claim in the description (quote it); "
-        "urgency_phrase_found is urgency language in the description (quote it).\n"
-        "- If description_patterns is absent or a key is not present, do NOT mention that field at all. "
-        "Never generate statements about policies, terms, or information that are not present in the data provided.\n"
-        "Sentence 3: Describe what the review data showed — use actual numbers (analyzed count, bot %, fake %). "
-        "If no reviews are available because the listing has no sales yet, state that plainly.\n"
-        "Sentence 4: Give one specific, actionable step based on what was found.\n\n"
+        "Write 4 short sentences in plain, informational English that give a BALANCED view — covering both concerns and reassuring points.\n\n"
+        "Sentence 1: State what the overall result indicates and whether the combined picture is concerning, mixed, or mostly reassuring.\n"
+        "Sentence 2: Describe the key listing concerns from the flags factually — what was detected and why it matters. "
+        "Use only the actual data:\n"
+        "- If seller_age shows months or years, do not call the seller new. "
+        "Only note a new seller if seller_new or seller_under_30d appears in the flags list.\n"
+        "- If the listing has no ratings or sales yet, state that no buyer feedback is available.\n"
+        "- If description_patterns is present, note those phrases neutrally (quote them). "
+        "If description_patterns is absent or a key is missing, do NOT mention that field at all.\n"
+        "Sentence 3: Describe what the review data showed using actual numbers (analyzed count, bot %, fake %). "
+        "If reviews showed no unusual patterns or low bot/fake percentages, say so positively. "
+        "If no reviews were captured because the listing has no sales yet, state that plainly. "
+        "Also mention any positive aspects of the listing when data supports it — for example: "
+        "positive_signals entries (mall status, top seller badge); "
+        "listing_rating >= 4.0 with listing_rating_count > 10; "
+        "listing_sold_count > 50; response_rate > 80; image_count > 3.\n"
+        "Sentence 4: Give one specific, actionable step the buyer should take based on the overall picture.\n\n"
         "RULES: Address the buyer directly using you/your. No markdown. No bullet points. No bold text. "
-        "No numbered lists. No headers. Plain sentences only. Neutral tone throughout. Under 640 characters."
+        "No numbered lists. No headers. Plain sentences only. Neutral, factual tone. Under 700 characters."
     )
     user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -225,9 +226,9 @@ def generate_listing_summary(context: Dict[str, Any]) -> Optional[str]:
     """Return a Groq-powered listing scan insight, falling back to a rule-built summary."""
     # --- Groq path ---
     if ENABLE_GROQ_LISTING_SUMMARY and GROQ_API_KEY:
-        raw = _call_groq(_build_listing_prompt(context), max_tokens=160)
+        raw = _call_groq(_build_listing_prompt(context), max_tokens=210)
         if raw:
-            result = _clean_insight(raw, max_sentences=3, max_chars=500)
+            result = _clean_insight(raw, max_sentences=4, max_chars=600)
             if result:
                 return result
 
@@ -270,9 +271,9 @@ def generate_deep_summary(context: Dict[str, Any]) -> Optional[str]:
     """Return a Groq-powered deep scan insight, falling back to a rule-built summary."""
     # --- Groq path ---
     if ENABLE_GROQ_LISTING_SUMMARY and GROQ_API_KEY:
-        raw = _call_groq(_build_deep_prompt(context), max_tokens=200)
+        raw = _call_groq(_build_deep_prompt(context), max_tokens=230)
         if raw:
-            result = _clean_insight(raw, max_sentences=4, max_chars=650)
+            result = _clean_insight(raw, max_sentences=4, max_chars=700)
             if result:
                 return result
 
