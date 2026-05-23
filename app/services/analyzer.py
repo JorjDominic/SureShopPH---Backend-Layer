@@ -139,6 +139,7 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
         },
         "flags": flags,
         "positive_signals": [s["message"] for s in positive],
+        "recommendations": recs[:3],
         "seller_account_age": listing.get("shop_age"),
         "seller_rating": listing.get("seller_rating"),
         "listing_rating_count": listing.get("rating_count"),
