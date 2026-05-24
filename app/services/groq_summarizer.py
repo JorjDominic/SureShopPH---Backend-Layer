@@ -168,7 +168,7 @@ def _clean_insight(text: str, max_sentences: int = 4, max_chars: int = 700) -> s
 def _build_listing_prompt(context: Dict[str, Any]) -> list:
     system = (
         "You are helping online shoppers in the Philippines understand a product listing scan result. "
-        "Write 3-4 short, direct sentences in plain English.\n\n"
+        "Write 3 short, direct sentences in plain English.\n\n"
         "CRITICAL RULES BEFORE YOU WRITE:\n"
         "- Do NOT open with 'The risk level is...' or 'The risk level indicates...'.\n"
         "- Never call the listing reassuring and then list concerns in the next sentence — that is a contradiction.\n"
@@ -192,11 +192,8 @@ def _build_listing_prompt(context: Dict[str, Any]) -> list:
         "positive_signals entries; listing_rating >= 4.0 with listing_rating_count > 10; "
         "listing_sold_count > 50; response_rate > 80. "
         "Skip entirely if nothing positive is present.\n"
-        "Sentence 4: If recommendations is not empty, synthesize those items into one or two natural sentences "
-        "as direct advice to the buyer — rephrase them, do not copy word-for-word. "
-        "Always also suggest asking the seller for additional product photos to check quality and condition.\n\n"
         "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
-        "Plain sentences only. Factual, neutral tone. Under 600 characters."
+        "Plain sentences only. Factual, neutral tone. Under 450 characters."
     )
     user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -205,7 +202,7 @@ def _build_listing_prompt(context: Dict[str, Any]) -> list:
 def _build_deep_prompt(context: Dict[str, Any]) -> list:
     system = (
         "You are helping online shoppers in the Philippines understand a combined listing and review scan result. "
-        "Write 4 short, direct sentences in plain English.\n\n"
+        "Write 3 short, direct sentences in plain English.\n\n"
         "CRITICAL RULES BEFORE YOU WRITE:\n"
         "- Do NOT open with 'The overall result indicates...' or 'The combined risk level is...'.\n"
         "- Never call the listing reassuring and then list concerns — that is a contradiction.\n"
@@ -222,6 +219,7 @@ def _build_deep_prompt(context: Dict[str, Any]) -> list:
         "Only call a seller new if seller_new or seller_under_30d is in the flags. "
         "Only quote description_patterns phrases if the key is present. "
         "Only apply Price Transparency Risk wording to flags that literally start with that phrase. "
+        "For Facebook buyer protection flag, add one brief clause — not a full sentence. "
         "Skip this sentence if there are no additional flags beyond Sentence 1.\n"
         "Sentence 3: Describe the review data using actual numbers (analyzed count, bot %, fake %). "
         "If bot and fake percentages are low, say so positively. "
@@ -229,11 +227,8 @@ def _build_deep_prompt(context: Dict[str, Any]) -> list:
         "Also note any positive listing signals — positive_signals entries; "
         "listing_rating >= 4.0 with listing_rating_count > 10; listing_sold_count > 50; "
         "response_rate > 80. Skip positive mention if nothing supports it.\n"
-        "Sentence 4: If recommendations is not empty, synthesize those items into one or two natural sentences "
-        "as direct advice to the buyer — rephrase them, do not copy word-for-word. "
-        "Always also suggest asking the seller for additional product photos to verify quality and condition.\n\n"
         "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
-        "Plain sentences only. Factual, neutral tone. Under 700 characters."
+        "Plain sentences only. Factual, neutral tone. Under 550 characters."
     )
     user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -246,7 +241,7 @@ def _build_facebook_listing_prompt(context: Dict[str, Any]) -> list:
         "no verified sellers, no escrow, and no platform dispute resolution. "
         "The listed price is often NOT the real price \u2014 placeholder prices (\u20b11, \u20b110, \u20b1999,999) and "
         "'PM for price' posts are common. Ratings and sold counts do not exist on this platform.\n\n"
-        "Write 3-4 short, direct sentences in plain English.\n\n"
+        "Write 3 short, direct sentences in plain English.\n\n"
         "CRITICAL RULES:\n"
         "- Do NOT open with 'The risk level is...' or 'The risk score indicates...'.\n"
         "- Never call a listing reassuring then list concerns in the next sentence \u2014 contradiction.\n"
@@ -265,12 +260,8 @@ def _build_facebook_listing_prompt(context: Dict[str, Any]) -> list:
         "Sentence 3: Note any positive signals or verified details if present. "
         "If confidence is Low, mention that limited information was available for this scan. "
         "Skip if nothing meaningful to report.\n"
-        "Sentence 4: Give direct buyer safety advice: always confirm the exact price and what is included "
-        "before agreeing, meet in a public place, inspect the item before paying, "
-        "prefer cash-on-delivery over advance GCash transfers, and review the seller's profile and account history. "
-        "If recommendations is not empty, weave in one or two items naturally.\n\n"
         "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
-        "Plain sentences only. Factual, neutral tone. Under 600 characters."
+        "Plain sentences only. Factual, neutral tone. Under 450 characters."
     )
     user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -281,7 +272,7 @@ def _build_facebook_deep_prompt(context: Dict[str, Any]) -> list:
         "You are helping a Filipino buyer understand a deep scan result for a Facebook Marketplace listing. "
         "Important: Facebook Marketplace has no product-level reviews \u2014 any review data in this scan is likely absent or minimal. "
         "Facebook is an informal peer-to-peer platform: no buyer protection, no verified sellers, placeholder prices are common.\n\n"
-        "Write 3-4 short, direct sentences in plain English.\n\n"
+        "Write 3 short, direct sentences in plain English.\n\n"
         "CRITICAL RULES:\n"
         "- Do NOT open with 'The overall risk is...' or 'The combined risk level indicates...'.\n"
         "- Never call a listing reassuring then list concerns \u2014 contradiction.\n"
@@ -294,11 +285,8 @@ def _build_facebook_deep_prompt(context: Dict[str, Any]) -> list:
         "Sentence 2: Describe additional listing flags factually if any exist beyond Sentence 1. Skip if none.\n"
         "Sentence 3: Address review data plainly \u2014 if none, note FB has no review functionality. "
         "Mention profile age or any positive signals if present.\n"
-        "Sentence 4: Give practical safety advice: confirm exact price and inclusions before agreeing, "
-        "meet in a public place, inspect before paying, avoid advance GCash, check the seller's profile history. "
-        "Weave in relevant items from recommendations if not empty.\n\n"
         "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
-        "Plain sentences only. Factual, neutral tone. Under 700 characters."
+        "Plain sentences only. Factual, neutral tone. Under 550 characters."
     )
     user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -310,9 +298,9 @@ def generate_listing_summary(context: Dict[str, Any]) -> Optional[str]:
     if ENABLE_GROQ_LISTING_SUMMARY and GROQ_API_KEY:
         platform = (context.get("platform") or "").lower()
         prompt_fn = _build_facebook_listing_prompt if platform == "facebook" else _build_listing_prompt
-        raw = _call_groq(prompt_fn(context), max_tokens=210)
+        raw = _call_groq(prompt_fn(context), max_tokens=170)
         if raw:
-            result = _clean_insight(raw, max_sentences=4, max_chars=600)
+            result = _clean_insight(raw, max_sentences=3, max_chars=450)
             if result:
                 return result
 
@@ -342,10 +330,7 @@ def generate_listing_summary(context: Dict[str, Any]) -> Optional[str]:
         else:
             s3 = "No trust badges like Mall-verified or Top Seller were found for this seller."
 
-        # Sentence 4 — buyer guidance
-        s4 = _buyer_tip(risk_score, risk_level)
-
-        return f"{s1} {s2} {s3} {s4}"
+        return f"{s1} {s2} {s3}"
     except Exception as exc:
         _log.warning("listing summary build failed: %s", exc)
         return None
@@ -357,9 +342,9 @@ def generate_deep_summary(context: Dict[str, Any]) -> Optional[str]:
     if ENABLE_GROQ_LISTING_SUMMARY and GROQ_API_KEY:
         platform = (context.get("platform") or "").lower()
         prompt_fn = _build_facebook_deep_prompt if platform == "facebook" else _build_deep_prompt
-        raw = _call_groq(prompt_fn(context), max_tokens=230)
+        raw = _call_groq(prompt_fn(context), max_tokens=190)
         if raw:
-            result = _clean_insight(raw, max_sentences=4, max_chars=700)
+            result = _clean_insight(raw, max_sentences=3, max_chars=550)
             if result:
                 return result
 
@@ -426,10 +411,7 @@ def generate_deep_summary(context: Dict[str, Any]) -> Optional[str]:
         else:
             s4 = "No trust badges like Mall-verified or Top Seller were found for this seller."
 
-        # Sentence 5 — buyer guidance
-        s5 = _buyer_tip(combined_score, combined_level)
-
-        return f"{s1} {s2} {s3} {s4} {s5}"
+        return f"{s1} {s2} {s3} {s4}"
     except Exception as exc:
         _log.warning("deep summary build failed: %s", exc)
         return None
