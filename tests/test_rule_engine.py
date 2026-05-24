@@ -89,11 +89,11 @@ def test_score_seller_recently_joined():
     assert any("recently joined" in f.lower() for f in flags)
 
 
-def test_score_seller_capped_at_25():
+def test_score_seller_capped_at_30():
     score, _ = score_seller({
         "platform": "shopee", "shop_age": "recently joined", "response_rate": 5,
     })
-    assert score <= 25
+    assert score <= 30
 
 
 def test_score_seller_low_response_rate():
@@ -123,11 +123,11 @@ def test_score_metadata_zero_sales():
     assert any("zero" in f.lower() for f in flags)
 
 
-def test_score_metadata_capped_at_25():
+def test_score_metadata_capped_at_30():
     score, _ = score_metadata({
         "platform": "shopee", "price": 0, "rating": 1.0, "image_count": 0,
     })
-    assert score <= 25
+    assert score <= 30
 
 
 # ────────────────── score_text ──────────────────

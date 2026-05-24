@@ -214,7 +214,7 @@ def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             score += 5
             flags.append("Seller name appears auto-generated or throwaway")
 
-    score = max(0, min(score, 25))
+    score = max(0, min(score, 30))
     return score, flags
 
 
@@ -237,6 +237,15 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
         score += 10
         flags.append("Price unusually low compared to typical market")
 
+    image_count = listing.get("image_count")
+    if isinstance(image_count, int):
+        if image_count == 0:
+            score += 10
+            flags.append("No product images uploaded")
+        elif image_count == 1:
+            score += 5
+            flags.append("Only one product image — limited visual verification")
+
     if platform in ("shopee", "lazada"):
         rating = listing.get("rating")
         rating_count = listing.get("rating_count")
@@ -254,10 +263,10 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
                 score += 22
                 flags.append("Has recorded sales but no buyer ratings — unusual pattern")
             else:
-                score += 14
+                score += 18
                 flags.append("Product has no ratings yet")
         elif rating == 5.0 and isinstance(rating_count, int) and rating_count < 10:
-            score += 15
+            score += 20
             flags.append("Perfect rating with very few reviews")
         elif isinstance(rating, (int, float)):
             if rating < 3.5:
@@ -372,7 +381,7 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
                         "Price Transparency Risk: listed price is unusually high for a marketplace listing — confirm actual price with seller"
                     )
 
-    score = max(0, min(score, 25))
+    score = max(0, min(score, 30))
     return score, flags
 
 
@@ -459,7 +468,7 @@ def score_text(listing: Dict[str, Any], nlp_hits: Dict[str, object] | None = Non
         vague = nlp_hits.get("vague") if nlp_hits else bool(_matches(text, VAGUE_PATTERNS))
 
         if urgency:
-            score += 10
+            score += 15
             flags.append("Urgency or scarcity language detected")
             m = (nlp_hits.get("urgency_match") if nlp_hits else None) or next(
                 (re.search(p, text, re.IGNORECASE) for p in URGENCY_PATTERNS if re.search(p, text, re.IGNORECASE)), None
@@ -475,7 +484,7 @@ def score_text(listing: Dict[str, Any], nlp_hits: Dict[str, object] | None = Non
             if m:
                 triggered_by["Over-promising language detected"] = m if isinstance(m, str) else m.group(0)
         if payment:
-            score += 10
+            score += 15
             flags.append("Pressure payment terms detected")
             m = (nlp_hits.get("payment_match") if nlp_hits else None) or next(
                 (re.search(p, text, re.IGNORECASE) for p in PAYMENT_PATTERNS if re.search(p, text, re.IGNORECASE)), None
@@ -505,7 +514,7 @@ def score_text(listing: Dict[str, Any], nlp_hits: Dict[str, object] | None = Non
     if desc:
         for _cp in _CONTACT_PATTERNS:
             if re.search(_cp, desc, re.IGNORECASE):
-                score += 12
+                score += 18
                 flags.append("Contact number or payment account found in description — seller may be soliciting off-platform payment")
                 break
 
