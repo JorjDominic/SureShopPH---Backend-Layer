@@ -279,8 +279,18 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             flags.append("Perfect rating with very few reviews")
         elif isinstance(rating, (int, float)):
             if rating < 3.5:
-                score += 15
-                flags.append("Low average rating")
+                # Scale penalty by how many reviews back up the bad rating —
+                # more reviews = higher confidence the low score is genuine.
+                _rc_count = int(rating_count) if isinstance(rating_count, (int, float)) else 0
+                if rating < 2.5 and _rc_count >= 5:
+                    score += 25
+                    flags.append("Critically low product rating with multiple buyer reviews")
+                elif _rc_count >= 10:
+                    score += 22
+                    flags.append("Low average rating confirmed by many buyers")
+                else:
+                    score += 15
+                    flags.append("Low average rating")
             elif rating < 4.0:
                 score += 8
                 flags.append("Below-average rating")
