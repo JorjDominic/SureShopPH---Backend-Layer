@@ -285,6 +285,9 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
                 if rating < 2.5 and _rc_count >= 5:
                     score += 25
                     flags.append("Critically low product rating with multiple buyer reviews")
+                elif rating <= 1.0 and _rc_count >= 1:
+                    score += 20
+                    flags.append("Single-buyer 1-star product rating")
                 elif _rc_count >= 10:
                     score += 22
                     flags.append("Low average rating confirmed by many buyers")
