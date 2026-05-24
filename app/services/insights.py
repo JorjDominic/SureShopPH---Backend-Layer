@@ -222,6 +222,18 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
             "a better picture."
         ),
     },
+    "Buyer ratings exist but sold count shows zero \u2014 possible reset or suppressed count": {
+        "code": "ratings_without_sales",
+        "category": "metadata",
+        "severity": "medium",
+        "tip": (
+            "This listing has buyer ratings, which confirms purchases occurred, "
+            "but the sold count is displayed as zero. This can happen when a "
+            "seller resets their listing or the platform does not display the "
+            "count accurately. Ask the seller about their sales history before "
+            "proceeding."
+        ),
+    },
     "Price shown as a variant range": {
         "code": "price_variant",
         "category": "metadata",
@@ -698,6 +710,13 @@ RECOMMENDATIONS_BY_CODE: Dict[str, str] = {
     "seller_response_slow": "Factor in the seller's response time when planning your purchase — send your questions early.",
     "rating_coverage_low": "Check the seller's overall profile for additional buyer feedback beyond this listing's reviews.",
     "soft_bait_compound": "Compare the listing against similar items to see whether the claimed deal matches the market.",
+    # Previously missing entries — common flags that were generating no advice
+    "rating_none": "Check the seller's other listings or shop page for buyer feedback to supplement the lack of product ratings.",
+    "sales_zero": "Message the seller to confirm stock availability and how they handle issues after purchase.",
+    "sales_unavailable": "Check the seller's overall profile for additional buyer feedback beyond this listing.",
+    "listing_no_history": "Look at the seller's other listings for buyer feedback, or wait for this listing to build some purchase history before buying.",
+    "seller_profile_unverifiable": "Visit the seller's profile page directly to verify their account age and any available buyer feedback.",
+    "ratings_without_sales": "Ask the seller to clarify why the sold count shows zero despite existing buyer reviews, and confirm they are actively fulfilling orders.",
 }
 
 
@@ -1075,11 +1094,21 @@ def codes_from_flags(flags: List[str]) -> Set[str]:
     return codes
 
 
-def build_recommendations(flags: List[str], limit: int = 6) -> List[str]:
+# Universal tips always appended as fallback — ensures the Advice section
+# is never empty even when few or no flags fired.
+_UNIVERSAL_RECS: List[str] = [
+    "Ask the seller for photos of the actual item — not stock images — to confirm condition and contents.",
+    "Use the platform's official checkout when possible — it provides buyer protection if something goes wrong.",
+    "Check the seller's overall profile and their other listings before committing to this purchase.",
+    "Compare this listing's price and details against similar listings before buying.",
+]
+
+
+def build_recommendations(flags: List[str], limit: int = 8) -> List[str]:
     """Deduplicated, ordered list of short suggestions tied to flags that
-    actually fired. Returns at most `limit` items so the UI stays digestible.
+    actually fired, padded with universal tips so advice is never empty.
+    Returns at most `limit` items so the UI stays digestible.
     """
-    codes = codes_from_flags(flags)
     seen: Set[str] = set()
     recs: List[str] = []
     # Preserve flag order for relevance
@@ -1093,6 +1122,13 @@ def build_recommendations(flags: List[str], limit: int = 6) -> List[str]:
             recs.append(rec)
         if len(recs) >= limit:
             break
+    # Pad with universal tips so the advice section is never empty
+    for tip in _UNIVERSAL_RECS:
+        if len(recs) >= limit:
+            break
+        if tip not in seen:
+            seen.add(tip)
+            recs.append(tip)
     return recs
 
 

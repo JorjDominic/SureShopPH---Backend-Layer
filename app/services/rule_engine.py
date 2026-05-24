@@ -241,10 +241,10 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
     if isinstance(image_count, int):
         if image_count == 0:
             score += 10
-            flags.append("No product images uploaded")
+            flags.append("No product images provided")
         elif image_count == 1:
             score += 5
-            flags.append("Only one product image — limited visual verification")
+            flags.append("Very few product images")
 
     if platform in ("shopee", "lazada"):
         rating = listing.get("rating")
@@ -286,15 +286,17 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
             _rc = 0
         if sold == 0:
             if _rc > 0:
-                score += 3
-                flags.append("Sold count unavailable — buyer ratings suggest purchases have occurred")
+                # Has ratings (so purchases happened) but sold count is zero —
+                # suggests the count was reset, suppressed, or not captured.
+                score += 15
+                flags.append("Buyer ratings exist but sold count shows zero — possible reset or suppressed count")
             else:
                 score += 10
                 flags.append("Zero recorded sales")
         elif sold is None:
             if _rc > 0:
-                score += 3
-                flags.append("Sold count unavailable — buyer ratings suggest purchases have occurred")
+                score += 5
+                flags.append("Buyer ratings exist but sold count shows zero — possible reset or suppressed count")
             else:
                 score += 8
                 flags.append("No items sold on this listing")

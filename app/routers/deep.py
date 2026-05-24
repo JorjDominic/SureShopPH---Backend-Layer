@@ -106,7 +106,7 @@ async def analyze_deep(
         "score_breakdown": listing_result["score_breakdown"],
         "listing_flags": listing_result["flags"],
         "positive_signals": [s["message"] for s in listing_result.get("positive_signals", [])],
-        "recommendations": build_recommendations(combined_flags)[:3],
+        "recommendations": build_recommendations(combined_flags)[:6],
         "seller_account_age": listing_in.get("shop_age"),
         "seller_rating": listing_in.get("seller_rating"),
         "listing_rating_count": listing_in.get("rating_count"),
