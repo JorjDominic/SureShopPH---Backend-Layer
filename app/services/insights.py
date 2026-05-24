@@ -225,7 +225,7 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
     "Buyer ratings exist but sold count shows zero \u2014 possible reset or suppressed count": {
         "code": "ratings_without_sales",
         "category": "metadata",
-        "severity": "medium",
+        "severity": "high",
         "tip": (
             "This listing has buyer ratings, which confirms purchases occurred, "
             "but the sold count is displayed as zero. This can happen when a "
