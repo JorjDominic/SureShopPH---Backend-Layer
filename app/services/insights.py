@@ -97,6 +97,26 @@ FLAG_INSIGHTS: Dict[str, Dict[str, str]] = {
             "It's worth scanning recent reviews to see common feedback."
         ),
     },
+    "Seller name appears platform-generated (e.g. user_XXXXXX)": {
+        "code": "seller_name_platform_generated",
+        "category": "seller",
+        "severity": "medium",
+        "tip": (
+            "The seller's name matches a format commonly assigned automatically "
+            "by the platform (e.g. user_12345678). These accounts often have no "
+            "transaction history. Check the seller's profile and reviews before buying."
+        ),
+    },
+    "Seller name appears auto-generated or throwaway": {
+        "code": "seller_name_autogen",
+        "category": "seller",
+        "severity": "low",
+        "tip": (
+            "The seller's display name looks like it may be randomly generated "
+            "or a throwaway account name. Checking their profile page and past "
+            "reviews can help you gauge how trustworthy they are."
+        ),
+    },
 
     # ---- Listing metadata ----
     "No product images provided": {

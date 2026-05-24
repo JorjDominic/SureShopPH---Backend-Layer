@@ -158,7 +158,7 @@ async def analyze_deep(
             "flags": listing_result["flags"] + comments_result["flags"],
             "confidence_level": listing_result["confidence"]["level"],
             "confidence_pct": listing_result["confidence"]["percentage"],
-            "scan_mode": "deep",
+            "scan_mode": "extension",
             "notes": groq_deep_msg or contextual_risk_message(level, combined_flags),
             "raw_data": {
                 "flag_details": listing_result.get("flag_details"),

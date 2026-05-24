@@ -206,10 +206,15 @@ def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
         score += 5
         flags.append("Seller response time is slow")
 
-    # Seller name anomaly — random digits, throwaway, or bot-like pattern
+    # Seller name anomaly — auto-generated, random digits, throwaway, or bot-like pattern
     _sname = listing.get("seller_name") or ""
     if _sname and len(_sname) >= 2:
         _digit_ratio = sum(c.isdigit() for c in _sname) / len(_sname)
+        # Obvious platform-generated formats (e.g. user_12345678, buyer99999, seller_001)
+        _platform_generated = bool(
+            re.match(r'^(?:user|buyer|seller|member|customer|shopper)[_.]?\d{3,}', _sname, re.IGNORECASE)
+            or re.match(r'^\d{6,}$', _sname)
+        )
         _bot_name = (
             _digit_ratio > 0.5
             or re.match(r'^[a-zA-Z]+_?\d{4,}$', _sname)
@@ -219,7 +224,10 @@ def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
                 and not re.search(r'[\s._-]', _sname))
             or bool(re.match(r'^[a-z]{1,3}[A-Z]{2,}[a-zA-Z0-9]*$', _sname))
         )
-        if _bot_name:
+        if _platform_generated:
+            score += 8
+            flags.append("Seller name appears platform-generated (e.g. user_XXXXXX)")
+        elif _bot_name:
             score += 5
             flags.append("Seller name appears auto-generated or throwaway")
 
