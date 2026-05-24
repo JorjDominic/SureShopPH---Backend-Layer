@@ -1097,10 +1097,10 @@ def codes_from_flags(flags: List[str]) -> Set[str]:
 # Universal tips always appended as fallback — ensures the Advice section
 # is never empty even when few or no flags fired.
 _UNIVERSAL_RECS: List[str] = [
-    "Ask the seller for photos of the actual item — not stock images — to confirm condition and contents.",
-    "Use the platform's official checkout when possible — it provides buyer protection if something goes wrong.",
-    "Check the seller's overall profile and their other listings before committing to this purchase.",
-    "Compare this listing's price and details against similar listings before buying.",
+    "Ask the seller for photos of the actual item — not stock images — before paying.",
+    "Choose Cash on Delivery or the platform's official buyer-protection checkout to keep your order covered if something goes wrong.",
+    "Check the seller's overall shop profile — their rating, response rate, and other listings — before committing.",
+    "Compare this listing's price against two or three similar listings to confirm it's within a normal range.",
 ]
 
 

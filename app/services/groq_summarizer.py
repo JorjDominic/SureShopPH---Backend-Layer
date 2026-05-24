@@ -1,4 +1,4 @@
-"""Optional Groq-backed comment summary generation with local fallback safety."""
+﻿"""Optional Groq-backed comment summary generation with local fallback safety."""
 from __future__ import annotations
 
 import json
@@ -180,20 +180,22 @@ def _build_listing_prompt(context: Dict[str, Any]) -> list:
         "Sentence 1: Describe the single most significant finding about this listing. "
         "Weave the risk level in naturally (e.g. 'This listing has a low overall risk score, but it shows sales with no buyer ratings...' or "
         "'This listing looks mostly trustworthy — it carries a very low risk score and...').\n"
-        "Sentence 2: Describe any additional flags factually — what was detected and why it matters. "
-        "Rules for specific flags:\n"
+        "Sentence 2: Describe seller and listing signals using the actual data values: "
+        "seller_rating (the seller's shop-level star rating), seller_account_age, response_rate, "
+        "listing_rating, listing_rating_count, listing_sold_count, price, and condition. "
+        "If any of these are absent or zero, briefly note that the data was not available. "
+        "Additional rules:\n"
         "- Only call a seller new if seller_new or seller_under_30d literally appears in the flags list.\n"
         "- If description_patterns keys are present, quote the matched phrase neutrally. "
         "If description_patterns is absent or empty, do NOT mention it.\n"
         "- Only apply 'Price Transparency Risk' wording if a flag literally starts with that exact phrase.\n"
         "- For Facebook buyer protection flag, add one brief clause — not a full sentence.\n"
-        "If there are no additional flags beyond Sentence 1, skip this sentence.\n"
-        "Sentence 3: Mention at least one positive aspect when the data supports it — "
-        "positive_signals entries; listing_rating >= 4.0 with listing_rating_count > 10; "
-        "listing_sold_count > 50; response_rate > 80. "
-        "Skip entirely if nothing positive is present.\n"
+        "Sentence 3: If positive signals exist (positive_signals entries; listing_rating >= 4.0 with "
+        "listing_rating_count > 10; listing_sold_count > 50; response_rate > 80; seller_rating >= 4.5), "
+        "lead with those. If not, briefly note what key data was and was not available for this scan "
+        "(e.g., whether sold count, seller rating, or condition was visible).\n"
         "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
-        "Plain sentences only. Factual, neutral tone. Under 450 characters."
+        "Plain sentences only. Factual, neutral tone. Under 600 characters."
     )
     user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -215,20 +217,23 @@ def _build_deep_prompt(context: Dict[str, Any]) -> list:
         "Weave in the combined risk level naturally (e.g. 'This deep scan found a medium overall risk — "
         "the listing has X reviews analyzed with Y% bot likelihood...' or "
         "'This listing received a low combined risk score across both the listing and its reviews...').\n"
-        "Sentence 2: Describe key listing flags factually. "
+        "Sentence 2: Describe seller and listing signals using the actual data values: "
+        "seller_rating (shop-level rating), seller_account_age, response_rate, listing_rating, "
+        "listing_rating_count, listing_sold_count, price, and condition. "
+        "If any are absent or zero, briefly note which data was unavailable. "
         "Only call a seller new if seller_new or seller_under_30d is in the flags. "
         "Only quote description_patterns phrases if the key is present. "
         "Only apply Price Transparency Risk wording to flags that literally start with that phrase. "
-        "For Facebook buyer protection flag, add one brief clause — not a full sentence. "
-        "Skip this sentence if there are no additional flags beyond Sentence 1.\n"
+        "For Facebook buyer protection flag, add one brief clause — not a full sentence.\n"
         "Sentence 3: Describe the review data using actual numbers (analyzed count, bot %, fake %). "
         "If bot and fake percentages are low, say so positively. "
-        "If no reviews exist because the listing has no sales yet, state that plainly. "
+        "If no reviews were analyzed, state that plainly. "
         "Also note any positive listing signals — positive_signals entries; "
         "listing_rating >= 4.0 with listing_rating_count > 10; listing_sold_count > 50; "
-        "response_rate > 80. Skip positive mention if nothing supports it.\n"
+        "response_rate > 80; seller_rating >= 4.5. "
+        "If nothing positive exists, note what key data was and was not available for this scan.\n"
         "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
-        "Plain sentences only. Factual, neutral tone. Under 550 characters."
+        "Plain sentences only. Factual, neutral tone. Under 700 characters."
     )
     user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -286,7 +291,7 @@ def _build_facebook_deep_prompt(context: Dict[str, Any]) -> list:
         "Sentence 3: Address review data plainly \u2014 if none, note FB has no review functionality. "
         "Mention profile age or any positive signals if present.\n"
         "RULES: Use you/your. No markdown. No bullet points. No bold. No headers. "
-        "Plain sentences only. Factual, neutral tone. Under 550 characters."
+        "Plain sentences only. Factual, neutral tone. Under 700 characters."
     )
     user = json.dumps(context, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -298,9 +303,9 @@ def generate_listing_summary(context: Dict[str, Any]) -> Optional[str]:
     if ENABLE_GROQ_LISTING_SUMMARY and GROQ_API_KEY:
         platform = (context.get("platform") or "").lower()
         prompt_fn = _build_facebook_listing_prompt if platform == "facebook" else _build_listing_prompt
-        raw = _call_groq(prompt_fn(context), max_tokens=170)
+        raw = _call_groq(prompt_fn(context), max_tokens=220)
         if raw:
-            result = _clean_insight(raw, max_sentences=3, max_chars=450)
+            result = _clean_insight(raw, max_sentences=3, max_chars=600)
             if result:
                 return result
 
@@ -342,9 +347,9 @@ def generate_deep_summary(context: Dict[str, Any]) -> Optional[str]:
     if ENABLE_GROQ_LISTING_SUMMARY and GROQ_API_KEY:
         platform = (context.get("platform") or "").lower()
         prompt_fn = _build_facebook_deep_prompt if platform == "facebook" else _build_deep_prompt
-        raw = _call_groq(prompt_fn(context), max_tokens=190)
+        raw = _call_groq(prompt_fn(context), max_tokens=250)
         if raw:
-            result = _clean_insight(raw, max_sentences=3, max_chars=550)
+            result = _clean_insight(raw, max_sentences=3, max_chars=700)
             if result:
                 return result
 
