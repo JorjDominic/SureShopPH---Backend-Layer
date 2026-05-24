@@ -206,11 +206,20 @@ def score_seller(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
         score += 5
         flags.append("Seller response time is slow")
 
-    # Seller name anomaly — random digits or throwaway pattern
+    # Seller name anomaly — random digits, throwaway, or bot-like pattern
     _sname = listing.get("seller_name") or ""
-    if _sname and len(_sname) >= 3:
+    if _sname and len(_sname) >= 2:
         _digit_ratio = sum(c.isdigit() for c in _sname) / len(_sname)
-        if _digit_ratio > 0.5 or re.match(r'^[a-zA-Z]+_?\d{4,}$', _sname):
+        _bot_name = (
+            _digit_ratio > 0.5
+            or re.match(r'^[a-zA-Z]+_?\d{4,}$', _sname)
+            or (re.match(r'^[a-z0-9]{5,12}$', _sname, re.IGNORECASE)
+                and re.search(r'[a-z]', _sname, re.IGNORECASE)
+                and re.search(r'[0-9]', _sname)
+                and not re.search(r'[\s._-]', _sname))
+            or bool(re.match(r'^[a-z]{1,3}[A-Z]{2,}[a-zA-Z0-9]*$', _sname))
+        )
+        if _bot_name:
             score += 5
             flags.append("Seller name appears auto-generated or throwaway")
 
@@ -315,6 +324,39 @@ def score_metadata(listing: Dict[str, Any]) -> Tuple[int, List[str]]:
                     flags.append("Unusually low rating coverage for sales volume")
             except (ValueError, ZeroDivisionError, TypeError):
                 pass
+
+        # Variant / ambiguous price — scanned price may not reflect the actual selected variant
+        if listing.get("price_is_variant") or listing.get("price_is_ambiguous"):
+            score += 18
+            flags.append("Price reflects an unselected variant — actual item price may differ from what was scanned")
+
+        # No warranty or return policy stated
+        _pw = listing.get("page_warnings") or {}
+        if isinstance(_pw, dict) and _pw.get("no_warranty"):
+            score += 8
+            flags.append("No warranty or return policy found on this listing")
+
+        # Category-based price floor — price implausibly low for the detected item type
+        _cat_text = ((listing.get("product_name") or "") + " " + (listing.get("description") or "")).lower()
+        _relaxed_cond = bool(re.search(
+            r'\b(defective|for\s*parts?|repair|damaged|not\s*working|used|second\s*hand|pre[-\s]?owned|sira)\b',
+            _cat_text, re.IGNORECASE
+        ))
+        _CATEGORY_FLOORS = [
+            ('vehicle',     r'\b(mclaren|ferrari|lamborghini|car\b|vehicle|sedan|suv|truck|sasakyan)\b',     100000, 30000),
+            ('motorcycle',  r'\b(motorcycle|scooter|aerox|nmax|raider|click|mio|beat|pcx|rusi|motorsiklo)\b', 15000,  5000),
+            ('electronics', r'\b(iphone|ipad|macbook|samsung|galaxy|xiaomi|oppo|vivo|realme|laptop|tablet|smartphone)\b', 3000, 500),
+            ('gaming',      r'\b(ps5|ps4|xbox|nintendo|switch|console|graphics\s*card|gpu|rtx|gtx)\b',       5000,  1000),
+            ('luxury',      r'\b(rolex|cartier|louis\s*vuitton|gucci|prada|luxury\s+(?:bag|watch))\b',        5000,  1000),
+        ]
+        if isinstance(price, (int, float)) and price > 0:
+            for _cat_name, _cat_pat, _strict_floor, _relaxed_floor in _CATEGORY_FLOORS:
+                if re.search(_cat_pat, _cat_text, re.IGNORECASE):
+                    _floor = _relaxed_floor if _relaxed_cond else _strict_floor
+                    if price < _floor * 0.4:
+                        score += 20
+                        flags.append(f"Listed price is unusually low for a {_cat_name} item — possible placeholder or mislabeled variant")
+                    break
 
     if platform == "facebook":
         # Platform baseline — FB has no buyer protection, no escrow, no verified sellers.
