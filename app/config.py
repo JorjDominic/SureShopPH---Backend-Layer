@@ -50,11 +50,13 @@ HIGH_RISK_PERSIST_THRESHOLD = int(os.getenv("HIGH_RISK_PERSIST_THRESHOLD", "60")
 
 # Risk band boundaries (inclusive lower, inclusive upper).
 # Single source of truth — referenced by score_calculator.band() and deep.py.
+# 5-level scale aligned with Japle version display bands.
 RISK_BANDS = [
-    (76, 100, "High", "red"),
-    (41, 75, "Medium", "orange"),
-    (21, 40, "Low", "yellow"),
-    (0, 20, "Very Low", "green"),
+    (85, 100, "Very High", "dark-red"),
+    (70,  84, "High",      "red"),
+    (40,  69, "Medium",    "orange"),
+    (20,  39, "Low",       "yellow"),
+    ( 0,  19, "Very Low",  "green"),
 ]
 
 # Deep-scan blend weights (must sum to 1.0)

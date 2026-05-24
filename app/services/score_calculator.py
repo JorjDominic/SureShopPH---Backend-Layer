@@ -30,6 +30,11 @@ def risk_message(level: str) -> str:
             "Several high-weight signals detected. Take time to review all "
             "indicators carefully before making any payment."
         ),
+        "Very High": (
+            "Strong risk signals detected across multiple categories. Do not "
+            "proceed with payment until you have independently verified the "
+            "seller and listing details."
+        ),
     }.get(level, "")
 
 
@@ -50,6 +55,11 @@ def closing_line(level: str) -> str:
         "High": (
             "Several high-weight signals were detected. Take time to carefully "
             "review all indicators above before completing any payment."
+        ),
+        "Very High": (
+            "Strong risk signals were detected across multiple categories. "
+            "Do not proceed with payment until you have independently verified "
+            "the seller and listing details through the platform's official channels."
         ),
     }.get(level, "")
 

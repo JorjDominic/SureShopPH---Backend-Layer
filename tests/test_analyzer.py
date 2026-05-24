@@ -70,4 +70,4 @@ def test_facebook_listing_runs():
         "url": "https://facebook.com/marketplace/item/123",
     }
     result = analyze_listing_payload(fb)
-    assert result["risk_level"] in ("Very Low", "Low", "Medium", "High")
+    assert result["risk_level"] in ("Very Low", "Low", "Medium", "High", "Very High")
