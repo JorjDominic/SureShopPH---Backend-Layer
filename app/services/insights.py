@@ -1123,8 +1123,15 @@ _UNIVERSAL_RECS: List[str] = [
     "Compare this listing's price against two or three similar listings to confirm it's within a normal range.",
 ]
 
+_FACEBOOK_UNIVERSAL_RECS: List[str] = [
+    "Ask the seller for photos of the actual item — not stock images — before paying.",
+    "Arrange to meet the seller in a safe, public place and inspect the item before handing over any payment.",
+    "Check the seller's Facebook profile — account age, other marketplace listings, and mutual connections — before committing.",
+    "Compare this listing's price against two or three similar listings to confirm it's within a normal range.",
+]
 
-def build_recommendations(flags: List[str], limit: int = 8) -> List[str]:
+
+def build_recommendations(flags: List[str], limit: int = 8, platform: str = "") -> List[str]:
     """Deduplicated, ordered list of short suggestions tied to flags that
     actually fired, padded with universal tips so advice is never empty.
     Returns at most `limit` items so the UI stays digestible.
@@ -1143,7 +1150,8 @@ def build_recommendations(flags: List[str], limit: int = 8) -> List[str]:
         if len(recs) >= limit:
             break
     # Pad with universal tips so the advice section is never empty
-    for tip in _UNIVERSAL_RECS:
+    _universal = _FACEBOOK_UNIVERSAL_RECS if platform == "facebook" else _UNIVERSAL_RECS
+    for tip in _universal:
         if len(recs) >= limit:
             break
         if tip not in seen:

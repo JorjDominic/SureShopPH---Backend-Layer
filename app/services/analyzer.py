@@ -175,8 +175,8 @@ def analyze_listing_payload(listing: Dict[str, Any]) -> Dict[str, Any]:
                 "There are no comments available for a Comments Scan at this time."
             )
 
-    recs = build_recommendations(flags)
-    recs_total = len(build_recommendations(flags, limit=999))
+    recs = build_recommendations(flags, platform=platform)
+    recs_total = len(build_recommendations(flags, limit=999, platform=platform))
     checklist = build_verify_checklist(flags, level)
     checklist_total = len(build_verify_checklist(flags, level, limit=999))
 
